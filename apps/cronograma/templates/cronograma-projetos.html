@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Cronograma de Projetos{% endblock %}
+
+{% block page_title %}Cronograma de Projetos{% endblock %}
+
+{% block nav_inicio %}active{% endblock %}
+
+{% block content %}
+
+<link rel="stylesheet" href="{% static 'css/cronograma-projetos.css' %}">
+
+<!-- ══ CONTEÚDO ══ -->
+<div class="dashboard-area" id="dashboardArea">
+  <div id="cr-root">
+    <div class="cr-toolbar">
+      <select id="cr-projsel" onchange="crSelectProject(this.value)" style="display:none"></select>
+      <button class="cr-btn primary sm" id="cr-btnnovo" onclick="crNovoProjeto()" style="display:none">
+        <span class="material-symbols-outlined">add</span>Projeto
+      </button>
+      <button class="cr-btn ghost sm" id="cr-btnpresent" onclick="crTogglePresentMode()" style="display:none">
+        <span class="material-symbols-outlined">visibility</span>Modo apresentação
+      </button>
+      <!-- tela cheia e larguras de coluna: preferências de LEITURA, não de
+           dados — valem pras duas visões, pra quem só lê e em modo
+           apresentação. Ver crToggleFullscreen() no script: quem entra em
+           fullscreen é o #cr-root inteiro, não a tabela. -->
+      <button class="cr-btn ghost sm" id="cr-btnfull" onclick="crToggleFullscreen()" style="display:none"
+              title="Expande a tabela para a tela inteira (Esc para sair)">
+        <span class="material-symbols-outlined">fullscreen</span>Tela cheia
+      </button>
+      <button class="cr-btn ghost sm" id="cr-btnresetcolw" onclick="crResetColWidths()" style="display:none"
+              title="Volta todas as colunas à largura padrão">
+        <span class="material-symbols-outlined">swap_horiz</span>Redefinir larguras
+      </button>
+      <!-- gravar no servidor é explícito desde ago/2026: editar só mexe no que
+           está na tela (+ rascunho local) e este botão é o único caminho até o
+           banco. Ver markDirty()/crSalvarAgora() no script. -->
+      <button class="cr-btn save sm" id="cr-btnsave" onclick="crSalvarAgora()" style="display:none" disabled
+              title="Grava no servidor as alterações desta sessão (Ctrl+S)">
+        <span class="material-symbols-outlined">save</span>Salvar
+      </button>
+      <span id="cr-saveind" class="cr-saveind">Carregando…</span>
+      <!-- laranja: leva a OUTRA visão, não é ação nesta. Ver .cr-btn.accent.
+           É o ÚLTIMO do DOM de propósito: o CSS o empurra pro canto direito
+           (#cr-btnview{margin-left:auto}), então tudo que vier depois dele no
+           HTML apareceria à direita dele e o botão deixaria de ser o canto. -->
+      <button class="cr-btn accent sm" id="cr-btnview" onclick="crToggleViewMode()" style="display:none">
+        <span class="material-symbols-outlined">groups</span>Ocupação da equipe
+      </button>
+    </div>
+    <div id="cr-body" class="cr-body">
+      <div class="cr-empty">Carregando cronograma…</div>
+    </div>
+
+    <!-- modal + toast: precisam ficar dentro de #cr-root pra herdar as
+         variáveis CSS (--cr-navy etc.) definidas nesse escopo. Fora daqui,
+         var(--cr-navy) fica indefinida e o botão "primary" (fundo navy)
+         renderiza transparente com texto branco — invisível no fundo branco. -->
+    <div id="cr-modalbg"><div class="cr-modal"><h3 id="cr-mtitle"></h3><div id="cr-mbody"></div><div class="cr-modalact" id="cr-mact"></div></div></div>
+    <div id="cr-toast"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+<script src="{% static 'js/cronograma-projetos.js' %}"></script>

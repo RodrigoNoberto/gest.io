@@ -1,0 +1,386 @@
+#cr-root{
+    --cr-bg:#F7F8FA; --cr-ink:#1B2A3B; --cr-muted:#6B7683; --cr-border:#DCE1E7; --cr-white:#FFFFFF;
+    --cr-navy:#1B2A3B; --cr-navy-dark:#0E1722;
+    --cr-green:#2E7D53; --cr-green-dark:#1E5237;
+    --cr-red:#C0392B; --cr-red-dark:#7A2318;
+    --cr-blue:#2B6CB0; --cr-blue-dark:#1B4A7A;
+    --cr-yellow:#E8B92F; --cr-yellow-dark:#A87F10;
+    --cr-gray-p:#B9C0C9; --cr-gray-p-dark:#8A929C;
+    --cr-amber:#B7791F; --cr-amber-pale:#FBF1DE;
+    /* laranja: cor SÓ de navegação (o botão que troca de visão). Fica fora da
+        paleta de estado da tabela de propósito — se reusasse o --cr-amber, o
+        botão seria lido com o mesmo significado do âmbar da Ocupação
+        ("2 projetos simultâneos"). */
+    --cr-orange:#C2610C; --cr-orange-dark:#9A4D09;
+    font-family:'Open Sans',sans-serif; font-size:13.5px; color:var(--cr-ink); line-height:1.5;
+    padding:18px 22px 40px;
+}
+#cr-root *{box-sizing:border-box}
+#cr-root .material-symbols-outlined{font-variation-settings:'opsz' 20;font-size:18px;vertical-align:middle;line-height:1}
+
+/* toolbar */
+.cr-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-bottom:14px;margin-bottom:14px;border-bottom:2px solid var(--cr-ink)}
+.cr-toolbar select{padding:7px 10px;border:1px solid var(--cr-border);border-radius:6px;background:var(--cr-white);font-family:inherit;font-size:13px;color:var(--cr-ink)}
+/* trocar de visão vai pro canto direito, longe da fila de ações da visão
+    atual — é navegação, não ação daqui (mesma razão do laranja em .cr-btn.accent).
+    margin-left:auto em vez de justify-content porque a toolbar tem flex-wrap:
+    em tela estreita o botão desce de linha e continua colado à direita, e
+    quando está oculto (style="display:none") a margem sai junto e os demais
+    botões não ficam com um vão órfão.
+    O canto direito é livre: os toggles do data/page-manager ficam num overlay
+    a 44px do topo e no máximo 44px de largura, e aqui a sobra até a borda da
+    página é 46px (24px da .dashboard-area + 22px do #cr-root). */
+#cr-btnview{margin-left:auto}
+.cr-saveind{font-size:11.5px;font-weight:700;color:var(--cr-muted);padding:4px 10px;border-radius:20px;background:var(--cr-bg);border:1px solid var(--cr-border)}
+.cr-saveind.ok{color:var(--cr-green);background:#E7F3EC;border-color:#b8ddc6}
+.cr-saveind.warn{color:var(--cr-amber);background:var(--cr-amber-pale);border-color:#e6d09a}
+.cr-saveind.err{color:var(--cr-red);background:#F7E7E7;border-color:#e6b8b8}
+
+/* buttons */
+.cr-btn{font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.cr-btn.primary{background:var(--cr-navy);color:#fff}.cr-btn.primary:hover{background:var(--cr-navy-dark)}
+.cr-btn.ghost{background:var(--cr-white);border:1px solid var(--cr-border);color:var(--cr-muted)}.cr-btn.ghost:hover{border-color:var(--cr-navy);color:var(--cr-navy)}
+.cr-btn.danger{background:var(--cr-white);border:1px solid var(--cr-red);color:var(--cr-red)}.cr-btn.danger:hover{background:#F7E7E7}
+/* verde = gravar no servidor. Único botão da página que escreve no banco,
+    então tem cor própria em vez de dividir o navy com "+ Projeto"/"+ Etapa",
+    que são ações locais (só mexem no que está na tela). */
+.cr-btn.save{background:var(--cr-green);color:#fff}.cr-btn.save:hover{background:var(--cr-green-dark)}
+/* laranja = leva a OUTRA visão; não é ação na visão atual */
+.cr-btn.accent{background:var(--cr-orange);color:#fff}.cr-btn.accent:hover{background:var(--cr-orange-dark)}
+.cr-btn:disabled{opacity:.45;cursor:default}
+.cr-btn.save:disabled:hover{background:var(--cr-green)}
+.cr-btn.sm{padding:5px 10px;font-size:11.5px}
+.cr-filelabel{position:relative;overflow:hidden}
+.cr-filelabel input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.cr-iconbtn{border:none;background:transparent;color:var(--cr-muted);cursor:pointer;padding:2px 4px;border-radius:4px;vertical-align:middle}
+.cr-iconbtn:hover{background:var(--cr-bg);color:var(--cr-navy)}
+.cr-iconbtn.danger:hover{color:var(--cr-red)}
+/* marcador de comentário na linha da tarefa. Só renderiza quando a tarefa
+    TEM comentário, e em qualquer modo — é a única porta pro texto livre em
+    modo apresentação e pra quem não pode editar (o modal de edição, a outra
+    porta, está fora de alcance nos dois casos). Menor e mais apagado que os
+    botões de ação pra não competir com eles na leitura da tabela. */
+.cr-cmtbtn{color:var(--cr-navy);opacity:.5}
+.cr-cmtbtn:hover{opacity:1;background:var(--cr-bg);color:var(--cr-navy)}
+/* o seletor precisa do #cr-root pra vencer a regra global de 18px */
+#cr-root .cr-cmtbtn .material-symbols-outlined{font-size:15px}
+
+/* empty state */
+.cr-empty{padding:40px 20px;text-align:center;color:var(--cr-muted);background:var(--cr-white);border:1px dashed var(--cr-border);border-radius:8px}
+.cr-emptyactions{display:flex;gap:10px;justify-content:center;margin-top:14px}
+
+/* bloco fixo ao rolar: título do projeto + KPIs + ações + legenda.
+    Gruda no topo da viewport (não existe header de página fixo acima
+    dela nesta página, então top:0 já é o lugar certo). Serve também
+    de "régua": --cr-tablemaxh (preenchido via JS, syncTableMaxHeight)
+    usa a altura deste bloco pra calcular quanto espaço sobra de tela
+    pra área da tabela logo abaixo. */
+.cr-stickytop{position:sticky;top:0;z-index:20;background:var(--bg,#F2F2F2)}
+
+/* project header */
+.cr-projhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.cr-projhead h2{font-size:19px;font-weight:800;margin:0 0 3px}
+.cr-projmeta{font-size:12px;color:var(--cr-muted)}
+.cr-projactions{display:flex;gap:8px}
+
+/* KPIs */
+.cr-kpirow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;max-width:640px}
+.cr-kpi{background:var(--cr-white);border:1px solid var(--cr-border);border-radius:7px;padding:12px 15px;border-top:2px solid var(--cr-navy)}
+.cr-kpi.cr-clickable{cursor:pointer}
+.cr-kpi.cr-clickable:hover{border-color:var(--cr-navy)}
+.cr-kpik{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cr-muted)}
+.cr-kpiv{font-size:22px;font-weight:800;color:var(--cr-navy-dark);margin-top:3px}
+
+/* alerts */
+.cr-alert{border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.5}
+.cr-alert.warn{background:var(--cr-amber-pale);border:1px solid #e6d09a;color:#6b4c14}
+.cr-alert.warn .material-symbols-outlined{color:var(--cr-amber)}
+
+/* actions bar */
+.cr-actionsbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+
+/* legend */
+.cr-legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:11px;color:var(--cr-muted);margin-bottom:12px}
+.cr-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+
+/* gantt table */
+/* max-height + overflow:auto (calculado em JS, syncTableMaxHeight) —
+    a tabela vira um "painel" com rolagem vertical própria, do tamanho
+    do que sobra de tela abaixo do bloco fixo (.cr-stickytop). Assim o
+    cabeçalho da tabela pode ficar sticky top:0 dentro DESTE mesmo
+    contêiner, sem precisar de deslocamento em pixel relativo à página
+    (overflow-x:auto já faz este wrapper virar o "ancestral de rolagem"
+    do thead — um sticky com offset relativo à página, calculado por
+    fora deste contêiner, fica deslocado). */
+.cr-ganttwrap{overflow:auto;max-height:var(--cr-tablemaxh,60vh);border:1px solid var(--cr-border);border-radius:8px;background:var(--cr-white)}
+/* table-layout:fixed + <colgroup> (montado em colgroupHTML) = a largura
+    declarada é a largura REAL da coluna. Três coisas dependem disso:
+        · o wrap do título só acontece se a coluna não puder esticar;
+        · o arraste de largura (.cr-rsz) só é exato se o navegador obedecer
+        o que a gente declara;
+        · os offsets `left` das colunas fixas saem dessas mesmas larguras —
+        com layout automático, uma célula de conteúdo largo esticava a
+        coluna, os `left` seguintes ficavam curtos e as colunas grudavam
+        em cima do título (era o bug de sobreposição que isto fecha).
+    A última <col> (.cr-colspacer) fica SEM largura de propósito: absorve a
+    sobra quando a soma das colunas é menor que o painel. Sem ela, o
+    min-width:100% faria o navegador distribuir a sobra proporcionalmente
+    entre TODAS as colunas — e a régua quebraria de novo. */
+table.cr-gantt{border-collapse:collapse;font-size:11.5px;table-layout:fixed;width:var(--cr-tw,100%);min-width:100%}
+.cr-gantt th,.cr-gantt td{border-bottom:1px solid var(--cr-border);border-right:1px solid var(--cr-border);padding:5px 8px;white-space:nowrap;vertical-align:middle;overflow:hidden;text-overflow:ellipsis}
+.cr-gantt .cr-spacer{border-right:none;padding:0}
+.cr-gantt thead tr{--cr-rowbg:var(--cr-navy);background:var(--cr-navy);color:#fff}
+/* background explícito é necessário aqui: sem ele, o fundo do th
+    sticky fica "transparente" ao conteúdo que rola por baixo (a cor
+    herdada da <tr> não repinta a célula quando ela é destacada da
+    posição normal pelo sticky). */
+.cr-gantt thead th{font-size:9.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-color:#2c3e50;position:sticky;top:0;z-index:3;background:var(--cr-rowbg)}
+.cr-gantt tr.cr-etapa-row{--cr-rowbg:#F2F4F7;background:#F2F4F7;cursor:pointer;font-weight:700}
+.cr-gantt tr.cr-tarefa-row{--cr-rowbg:#fff;background:#fff}
+.cr-gantt tr.cr-invalida{--cr-rowbg:#FBEFEC}
+/* alça de arraste da largura da coluna, na borda direita do cabeçalho.
+    Só o thead tem alça — o th é sticky (position:sticky), então serve de
+    referência pro absolute sem precisar de mais nada.
+    Sem cor nenhuma de propósito (ago/2026): o risco claro + o realce no
+    hover apareciam em TODO cabeçalho de período e sujavam a régua. O
+    `cursor:col-resize` continua entregando a affordance, e a dica abaixo da
+    legenda diz por escrito que a borda é arrastável. */
+.cr-rsz{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize}
+
+/* Colunas fixas na rolagem horizontal: Nº, Etapa/Tarefa e P/R. As demais
+    passam POR BAIXO delas (fundo opaco + z-index maior nas fixas). O P/R
+    entra na lista porque é ele que diz qual das duas linhas é o Planejado
+    e qual é o Realizado — sem ele grudado, as barras ficam ambíguas com a
+    tabela rolada. */
+.cr-gantt .cr-col-num,.cr-gantt .cr-col-titulo,.cr-gantt .cr-col-pr{position:sticky;background:var(--cr-rowbg,#fff);z-index:2}
+.cr-gantt thead .cr-col-num,.cr-gantt thead .cr-col-titulo,.cr-gantt thead .cr-col-pr{z-index:4}
+/* ⚠ os seletores de coluna PRECISAM do `.cr-gantt` na frente. Sem ele
+    (`.cr-col-titulo` = 1 classe) a regra perde de `.cr-gantt td`
+    (1 classe + 1 elemento) e o `white-space:nowrap` da regra base vence —
+    era isso que impedia o wrap do título e o substituía por reticências. */
+/* padding apertado nas duas colunas mais estreitas: o conteúdo é curto
+    ("1.10", "P") mas os 8px de cada lado da regra base comiam metade da
+    célula e o texto virava reticências */
+.cr-gantt .cr-col-num{left:0;text-align:center;padding-left:3px;padding-right:3px}
+.cr-gantt .cr-col-titulo{left:var(--cr-l-titulo,38px);white-space:normal;overflow-wrap:break-word;text-align:left}
+.cr-gantt .cr-col-resp{white-space:normal;overflow-wrap:break-word}
+.cr-gantt .cr-col-inicio,.cr-gantt .cr-col-fim,.cr-gantt .cr-col-novoprazo,.cr-gantt .cr-col-conclusao{text-align:center}
+.cr-gantt .cr-col-pr{left:var(--cr-l-pr,298px);text-align:center;color:var(--cr-muted);font-weight:700;font-size:10px;padding-left:2px;padding-right:2px}
+.cr-caret{color:var(--cr-muted);margin-right:4px}
+.cr-bucket{text-align:center}
+/* position:relative sustenta os marcadores de FCA (::after mais abaixo) */
+.cr-bcell{height:22px;padding:0;position:relative}
+.cr-bcell-click{cursor:pointer}
+.cr-bcell-click:hover{box-shadow:inset 0 0 0 2px var(--cr-navy)}
+/* ---- marcadores de FCA na célula da linha R ----
+    Dois estados, deliberadamente assimétricos na força visual:
+
+      · cr-fca-ok  → cantinho branco discreto. "Tem registro aqui, se
+        interessar" — não é problema, não deve competir com a cor de estado.
+      · cr-fca-pend → "!" no meio da célula + anel âmbar. Reprogramou e não
+        disse por quê: isso é dívida, e some no instante em que o FCA é
+        registrado.
+
+    O anel usa a MESMA propriedade do hover (box-shadow inset), então passar o
+    mouse troca o âmbar pelo navy — transitório e sem perda de informação, já
+    que o "!" continua lá. */
+.cr-bcell.cr-fca-ok::after{
+  content:'';position:absolute;top:1px;right:1px;
+  border-top:5px solid rgba(255,255,255,.95);border-left:5px solid transparent;
+}
+.cr-bcell.cr-fca-pend{box-shadow:inset 0 0 0 2px var(--cr-yellow)}
+/* branco + sombra em vez de uma cor por estado: na prática a célula pendente é
+    sempre vermelha (marca declarada 'reprogramada'), mas a sombra garante que o
+    "!" continue legível se algum dia ele cair sobre fundo claro — mais barato
+    que manter um override por cor de fundo. */
+.cr-bcell.cr-fca-pend::after{
+  content:'!';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:800;line-height:1;color:#fff;text-shadow:0 0 2px rgba(0,0,0,.6);
+}
+.cr-revcol{border-right:3px solid var(--cr-red) !important}
+/* Paleta de estado (ago/2026): em dia verde, atrasada amarelo,
+    reprogramada (= tem Novo Prazo) vermelho, concluída azul. Os mesmos
+    tokens valem pras marcas manuais de período (tarefa.realizado) e pra
+    leitura automática derivada das datas — uma cor, um significado. */
+.cr-c-p{background:var(--cr-gray-p)}
+.cr-c-andamento{background:var(--cr-green)}
+.cr-c-atrasada{background:var(--cr-yellow)}
+.cr-c-reprogramada{background:var(--cr-red)}
+.cr-c-concluida{background:var(--cr-blue)}
+.cr-c-futura{background:transparent}
+/* tom escuro = trecho que só existe por causa do Novo Prazo. No Gantt isso
+    acontece SÓ na linha P (cinza escuro): replanejar move o plano, não o
+    realizado — a linha R não tem extensão. Na Ocupação, que é visão de
+    planejamento, o tom escuro marca o bucket que entrou na grade por causa
+    do Novo Prazo, na cor do estado da tarefa. */
+.cr-c-p.cr-c-replan{background:var(--cr-gray-p-dark)}
+.cr-c-andamento.cr-c-replan{background:var(--cr-green-dark)}
+.cr-c-atrasada.cr-c-replan{background:var(--cr-yellow-dark)}
+.cr-c-reprogramada.cr-c-replan{background:var(--cr-red-dark)}
+.cr-c-concluida.cr-c-replan{background:var(--cr-blue-dark)}
+.cr-gantt .cr-emptyrow{text-align:center;color:var(--cr-muted);padding:16px !important;white-space:normal}
+.cr-gantt .cr-warncell{color:var(--cr-red-dark);font-weight:600;white-space:normal;background:#FBEFEC}
+/* dica de leitura, logo abaixo da legenda */
+.cr-hintline{font-size:10.5px;color:var(--cr-muted);line-height:1.6;margin:-4px 0 12px}
+.cr-hintline b{color:var(--cr-ink)}
+.cr-hintline i{font-style:normal;font-weight:700;color:var(--cr-yellow-dark)}
+
+/* ---- tela cheia ----
+    Uma CLASSE, não o seletor :fullscreen — porque vale pros dois caminhos: o
+    fullscreen nativo do #cr-root e o overlay de fallback (ver
+    crToggleFullscreen no JS). Com :fullscreen o fallback ficaria sem estilo.
+
+    O `background` é obrigatório, não estético: em fullscreen nativo o navegador
+    pinta o fundo do elemento de PRETO por default, e a página é texto escuro
+    sobre branco — ficaria ilegível.
+
+    ⚠ Nada de `transform`/`filter` aqui. #cr-modalbg, #cr-toast e #cr-statusdrop
+    são position:fixed e filhos do #cr-root; qualquer um dos dois no ancestral
+    cria containing block e os três passam a se posicionar em relação a ELE em
+    vez da viewport — o dropdown de marcar período abriria no lugar errado.
+
+    ⚠ Os seletores precisam do `#cr-root` na frente. O próprio #cr-root já
+    define `padding`, e um seletor de classe (0,1,0) perde de um de id (1,0,0) —
+    sem o prefixo, a tela cheia herdaria o padding de 18px/22px/40px da página e
+    a tabela perderia área justamente no modo que existe pra dar área a ela. */
+#cr-root.cr-full{background:var(--cr-bg);overflow:auto;padding:14px 18px 24px}
+/* fallback sem fullscreen nativo. z-index abaixo do modal (9000), do toast
+    (9100) e do dropdown (9200), que são filhos e precisam ficar por cima. */
+#cr-root.cr-full-overlay{position:fixed;inset:0;z-index:8000}
+/* trava a rolagem da página atrás do overlay, senão a roda do mouse fora da
+    tabela rola o documento por baixo. */
+body.cr-fullbody{overflow:hidden}
+
+/* ---- visão "Ocupação da equipe" ----
+    Reusa .cr-ganttwrap / table.cr-gantt / .cr-bcell / .cr-c-* do Gantt. O que
+    muda é o conjunto de colunas fixas: aqui são 2 (nome + pico), não as 3 do
+    Gantt, então os offsets `left` precisam ser próprios. */
+.cr-gantt .cr-acol-nome,.cr-gantt .cr-acol-pico{position:sticky;background:var(--cr-rowbg,#fff);z-index:2}
+.cr-gantt thead .cr-acol-nome,.cr-gantt thead .cr-acol-pico{z-index:4}
+.cr-gantt .cr-acol-nome{left:0;white-space:normal;overflow-wrap:break-word;text-align:left}
+.cr-gantt .cr-acol-pico{left:var(--cr-l-apico,260px);text-align:center}
+.cr-gantt tr.cr-pessoa-row{--cr-rowbg:#F2F4F7;background:#F2F4F7;cursor:pointer;font-weight:700}
+.cr-gantt tr.cr-alocproj-row{--cr-rowbg:#fff;background:#fff}
+.cr-alocproj-nome{padding-left:26px !important;color:var(--cr-muted);font-weight:600}
+.cr-alocproj-row.cr-clickable:hover{--cr-rowbg:#F7F8FA;background:#F7F8FA}
+/* carga = projetos simultâneos. Teto praticável 2 → âmbar; 3+ → vermelho.
+    Carga 1 fica SEM fundo de propósito: se fosse verde, competiria com o
+    verde de "em andamento" das sub-linhas e as duas leituras da tabela
+    (carga na linha da pessoa, estado na linha do projeto) se confundiriam. */
+.cr-loadcell{text-align:center;font-weight:800;font-size:11px;padding:0}
+.cr-load-0{color:var(--cr-border)}
+.cr-load-1{color:var(--cr-navy)}
+.cr-load-2{background:var(--cr-amber);color:#fff}
+.cr-load-3{background:var(--cr-red);color:#fff}
+.cr-picocell{font-weight:800}
+.cr-pico-3{color:var(--cr-red)}
+/* "hoje": tracejado navy, pra não se confundir com a linha de revisão do
+    Gantt, que é sólida e vermelha */
+.cr-todaycol{border-right:2px dashed var(--cr-navy) !important}
+
+/* barra de controles da visão de ocupação */
+.cr-aloctools{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px}
+.cr-alocfield{display:flex;align-items:center;gap:7px}
+.cr-alocfield>label{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cr-muted)}
+.cr-segc{display:inline-flex;border:1px solid var(--cr-border);border-radius:6px;overflow:hidden;background:var(--cr-white)}
+.cr-segc button{font-family:inherit;font-size:11.5px;font-weight:700;padding:6px 13px;border:none;background:transparent;color:var(--cr-muted);cursor:pointer}
+.cr-segc button+button{border-left:1px solid var(--cr-border)}
+.cr-segc button.active{background:var(--cr-navy);color:#fff}
+.cr-check{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--cr-ink)}
+.cr-check input{cursor:pointer;margin:0}
+/* seletor de projetos considerados: <details> em vez de modal — abre no
+    lugar, fecha com Esc/clique fora, e não tem estado próprio pra sincronizar */
+.cr-projpick{position:relative}
+.cr-projpick>summary{list-style:none;cursor:pointer;padding:6px 12px;border:1px solid var(--cr-border);border-radius:6px;background:var(--cr-white);font-size:11.5px;font-weight:700;color:var(--cr-ink);display:flex;align-items:center;gap:6px}
+.cr-projpick>summary::-webkit-details-marker{display:none}
+.cr-projpick>summary:hover{border-color:var(--cr-navy)}
+.cr-projpicklist{position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:var(--cr-white);border:1px solid var(--cr-border);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:10px 12px;min-width:330px;max-height:320px;overflow-y:auto}
+.cr-projpicklist label{display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:12px;line-height:1.4;cursor:pointer}
+.cr-projpicklist .cr-hint{font-size:10.5px;color:var(--cr-muted);border-top:1px solid var(--cr-border);margin-top:8px;padding-top:8px;line-height:1.5}
+
+/* rodapé de leitura da visão de ocupação */
+.cr-alocnote{font-size:11px;color:var(--cr-muted);line-height:1.7;margin-top:10px;padding-top:10px;border-top:1px solid var(--cr-border)}
+.cr-alocnote b{color:var(--cr-ink)}
+.cr-alocnote ul{margin:4px 0 0;padding-left:18px}
+
+/* modal + toast */
+#cr-modalbg{position:fixed;inset:0;background:rgba(27,42,59,.5);display:none;align-items:center;justify-content:center;z-index:9000;padding:20px}
+#cr-modalbg.show{display:flex}
+.cr-modal{background:#fff;border-radius:10px;max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:22px 24px;box-shadow:0 12px 40px rgba(0,0,0,.25);font-family:'Open Sans',sans-serif}
+.cr-modal h3{font-size:16px;font-weight:800;margin:0 0 14px;color:var(--cr-ink)}
+.cr-modalact{display:flex;gap:9px;justify-content:flex-end;margin-top:14px}
+#cr-toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--cr-ink);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:.25s;z-index:9100;pointer-events:none}
+#cr-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#cr-toast.err{background:var(--cr-red)}
+
+/* mini-dropdown do clique numa célula da linha Realizado: uma lista só, o
+    status da tarefa NAQUELE período. O cabeçalho (.cr-statushdr) diz de qual
+    semana/mês é a célula clicada. */
+#cr-statusdrop{position:fixed;background:var(--cr-white);border:1px solid var(--cr-border);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.18);z-index:9200;font-family:'Open Sans',sans-serif;font-size:12.5px;overflow:hidden;min-width:210px}
+.cr-statusopt{padding:7px 12px;cursor:pointer;color:var(--cr-ink);white-space:nowrap;display:flex;align-items:center;gap:8px}
+.cr-statusopt:hover{background:var(--cr-bg)}
+.cr-statusopt.sel{font-weight:700;background:var(--cr-bg)}
+.cr-statushdr{padding:7px 12px 5px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cr-muted);background:var(--cr-bg);border-top:1px solid var(--cr-border)}
+.cr-statushdr:first-child{border-top:none}
+.cr-sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto;border:1px solid rgba(0,0,0,.14)}
+/* amostra da opção "Em branco": fundo branco + a borda que .cr-sw já dá.
+    É a mesma leitura da célula sem classificação na linha R. */
+.cr-sw-vazio{background:var(--cr-white)}
+
+/* form (crBuildForm) */
+.cr-form{display:flex;flex-direction:column;gap:0}
+.cr-frow{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 16px;margin-bottom:12px}
+.cr-frow.one{grid-template-columns:1fr}
+.cr-fld{display:flex;flex-direction:column;gap:4px}
+.cr-fld label{font-size:11.5px;font-weight:700;color:var(--cr-ink)}
+.cr-fld input,.cr-fld select,.cr-fld textarea{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--cr-border);border-radius:6px;background:#fff;color:var(--cr-ink);width:100%}
+.cr-fld textarea{resize:vertical;min-height:56px;line-height:1.5}
+.cr-fld input:focus,.cr-fld select:focus,.cr-fld textarea:focus{outline:none;border-color:var(--cr-navy);box-shadow:0 0 0 2px #DCE1E7}
+
+/* leitura do comentário (modal read-only aberto pelo marcador da tarefa).
+    pre-wrap preserva as quebras de linha que o autor digitou; break-word
+    impede que uma URL longa sem espaço estique o modal. */
+.cr-cmttitle{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cr-muted);margin-bottom:8px}
+.cr-cmttext{white-space:pre-wrap;overflow-wrap:break-word;font-size:13px;line-height:1.65;color:var(--cr-ink);background:var(--cr-bg);border:1px solid var(--cr-border);border-radius:6px;padding:12px 14px;max-height:52vh;overflow-y:auto}
+
+/* ---- FCA por período ----
+    Reusa .cr-cmttext pro texto (mesmo pre-wrap, mesmo break-word): FCA e
+    comentário são a mesma classe de conteúdo — texto livre digitado por gente,
+    que precisa manter as quebras de linha e nunca ser interpretado como
+    marcação. */
+.cr-statusfca{border-top:1px solid var(--cr-border);color:var(--cr-navy);font-weight:700}
+#cr-root .cr-statusfca .material-symbols-outlined{font-size:15px}
+.cr-fcalabel{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--cr-muted);margin-bottom:3px}
+.cr-fcafield{margin-bottom:8px}
+/* dentro do painel o texto é curto e são vários — teto menor que no modal, pra
+    um FCA prolixo não empurrar os outros pra fora da tela */
+.cr-fcaitem .cr-cmttext{max-height:22vh;font-size:12.5px;padding:8px 10px}
+.cr-fcameta{font-size:11px;color:var(--cr-muted);font-style:italic;margin-top:6px}
+.cr-fcahint{font-size:11px;color:var(--cr-muted);line-height:1.6;margin:-4px 0 10px}
+/* painel de leitura, no bloco fixo logo acima da tabela */
+.cr-fcapanel{border:1px solid var(--cr-border);border-radius:8px;background:var(--cr-white);margin-bottom:12px}
+.cr-fcapanel>summary{cursor:pointer;padding:7px 12px;font-size:11.5px;font-weight:700;color:var(--cr-navy);display:flex;align-items:center;gap:7px;list-style:none}
+.cr-fcapanel>summary::-webkit-details-marker{display:none}
+.cr-fcapanel>summary:hover{background:var(--cr-bg)}
+.cr-fcalist{max-height:34vh;overflow-y:auto;padding:4px 12px 12px;border-top:1px solid var(--cr-border)}
+.cr-fcaitem{border-left:3px solid var(--cr-border);padding:8px 0 8px 10px;margin-top:10px}
+/* pendência com a cor do estado que a gerou (vermelho de reprogramada), pro
+    painel e a tabela contarem a mesma história */
+.cr-fcaitem-pend{border-left-color:var(--cr-red)}
+.cr-fcahead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.cr-fcaper{font-size:12px;font-weight:800;color:var(--cr-ink)}
+.cr-fcatarefa{font-size:11.5px;color:var(--cr-muted)}
+.cr-fcatag{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;padding:2px 6px;border-radius:10px}
+/* o amarelo de "Atrasada" e o cinza de planejado não sustentam texto branco */
+.cr-fcatag.cr-c-atrasada,.cr-fcatag.cr-c-p{color:var(--cr-ink)}
+
+/* preview do import de planilha EAP (modal de conferência) */
+.cr-impcard{border:1px solid var(--cr-border);border-left:3px solid var(--cr-navy);border-radius:7px;padding:12px 14px;margin-bottom:10px;background:var(--cr-bg)}
+.cr-impcard h4{font-size:13.5px;font-weight:800;margin:0 0 6px;color:var(--cr-ink)}
+.cr-impmeta{font-size:11.5px;color:var(--cr-muted);line-height:1.7}
+.cr-impdup{margin-top:8px}
+.cr-impdup label{display:block;font-size:11.5px;font-weight:700;color:var(--cr-amber);margin-bottom:4px}
+.cr-impdup select{font-family:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--cr-border);border-radius:6px;background:#fff;color:var(--cr-ink);width:100%}
+.cr-impavisos{margin:8px 0 0;padding-left:18px;font-size:11.5px;color:#6b4c14;line-height:1.6}
+
+@media(max-width:820px){.cr-kpirow{grid-template-columns:1fr}}
