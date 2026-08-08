@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "projetos": [
+    {
+      "id": "demoportal2026",
+      "nome": "Portal de Atendimento - Demo",
+      "lider": "Rodrigo César",
+      "unidade": "semanas",
+      "dataRevisao": "2026-08-10",
+      "inicio": "",
+      "fim": "",
+      "horizonteQtd": "",
+      "etapas": [
+        {
+          "id": "demoe1",
+          "titulo": "Descoberta e planejamento",
+          "tarefas": [
+            {
+              "id": "demot1",
+              "titulo": "Mapear jornadas prioritarias",
+              "responsavel": "Ana",
+              "inicio": "2026-07-06",
+              "fim": "2026-07-17",
+              "status": "concluida",
+              "dataConclusaoReal": "2026-07-16",
+              "novoPrazo": "",
+              "realizado": {
+                "2026-07-07": "em_andamento",
+                "2026-07-14": "concluida"
+              },
+              "fcaPorPeriodo": {},
+              "comentarios": "Entrevistas consolidadas com atendimento, financeiro e operacao."
+            },
+            {
+              "id": "demot2",
+              "titulo": "Priorizar backlog inicial",
+              "responsavel": "Brenda",
+              "inicio": "2026-07-20",
+              "fim": "2026-07-31",
+              "status": "concluida",
+              "dataConclusaoReal": "2026-08-03",
+              "novoPrazo": "2026-08-03",
+              "realizado": {
+                "2026-07-21": "em_andamento",
+                "2026-07-28": "reprogramada",
+                "2026-08-04": "concluida"
+              },
+              "fcaPorPeriodo": {
+                "2026-07-28": {
+                  "fato": "Dependencia de validacao da area juridica atrasou a priorizacao.",
+                  "causa": "Agenda de aprovacao coincidia com fechamento mensal.",
+                  "acao": "Reservar janela fixa de revisao juridica antes da proxima rodada."
+                }
+              },
+              "comentarios": ""
+            }
+          ]
+        },
+        {
+          "id": "demoe2",
+          "titulo": "Construcao do MVP",
+          "tarefas": [
+            {
+              "id": "demot3",
+              "titulo": "Implementar tela de solicitacoes",
+              "responsavel": "Carlos",
+              "inicio": "2026-08-03",
+              "fim": "2026-08-21",
+              "status": "em_andamento",
+              "dataConclusaoReal": "",
+              "novoPrazo": "",
+              "realizado": {
+                "2026-08-04": "em_andamento"
+              },
+              "fcaPorPeriodo": {},
+              "comentarios": "Primeira versao navegavel prevista para revisao com usuarios."
+            },
+            {
+              "id": "demot4",
+              "titulo": "Configurar exportacao de relatorios",
+              "responsavel": "Diego",
+              "inicio": "2026-08-17",
+              "fim": "2026-09-04",
+              "status": "nao_iniciada",
+              "dataConclusaoReal": "",
+              "novoPrazo": "",
+              "realizado": {},
+              "fcaPorPeriodo": {},
+              "comentarios": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "democarteira26",
+      "nome": "Consolidacao da Carteira - Demo",
+      "lider": "Rafael Lima",
+      "unidade": "meses",
+      "dataRevisao": "2026-08-10",
+      "inicio": "",
+      "fim": "",
+      "horizonteQtd": "",
+      "etapas": [
+        {
+          "id": "demoe3",
+          "titulo": "Integracao de dados",
+          "tarefas": [
+            {
+              "id": "demot5",
+              "titulo": "Consolidar bases historicas",
+              "responsavel": "Equipe BI",
+              "inicio": "2026-06-01",
+              "fim": "2026-07-31",
+              "status": "concluida",
+              "dataConclusaoReal": "2026-07-29",
+              "novoPrazo": "",
+              "realizado": {
+                "2026-06-01": "em_andamento",
+                "2026-07-01": "concluida"
+              },
+              "fcaPorPeriodo": {},
+              "comentarios": ""
+            },
+            {
+              "id": "demot6",
+              "titulo": "Validar indicadores executivos",
+              "responsavel": "Equipe BI",
+              "inicio": "2026-08-01",
+              "fim": "2026-09-30",
+              "status": "em_andamento",
+              "dataConclusaoReal": "",
+              "novoPrazo": "2026-10-31",
+              "realizado": {
+                "2026-08-01": "reprogramada"
+              },
+              "fcaPorPeriodo": {
+                "2026-08-01": {
+                  "fato": "Novos indicadores foram adicionados apos a revisao da diretoria.",
+                  "causa": "Escopo executivo ampliado para incluir margem e churn.",
+                  "acao": "Separar painel minimo de agosto e indicadores ampliados para outubro."
+                }
+              },
+              "comentarios": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

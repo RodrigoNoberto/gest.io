@@ -1,5 +1,8 @@
 .dockerignore
 *__pycache__*
 .env
+*.json
+static/data/*
+!static/data/cronograma-exemplo.json
 .venv
 db.sqlite3

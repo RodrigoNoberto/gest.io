@@ -218,7 +218,7 @@ body {
   border-radius: 14px;
   box-shadow: 0 8px 28px rgba(0,0,0,.11);
   min-width: 230px;
-  z-index: 100;
+  z-index: 1000;
   overflow: hidden;
 }
 .user-dropdown.open { display: block; }

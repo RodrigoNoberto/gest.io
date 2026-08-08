@@ -1,75 +1,27 @@
-/* ════════════════════════════════════════════════════════════════
-   CRONOGRAMA DE PROJETOS — EAP/Gantt (Planejado × Realizado)
-
-   Página autossuficiente. Persistência em `/api/cronograma/projetos`: UMA
-   LINHA POR PROJETO, uma requisição por projeto, com compare-and-swap
-   obrigatório (If-Match). O isolamento entre editores é do servidor, não
-   deste arquivo.
-
-   Gravação por SAVE EXPLÍCITO (botão Salvar / Ctrl+S). Editar mexe só no que
-   está na tela e num rascunho no localStorage; nada sobe pro servidor até o
-   save. Ver markDirty(), recalcPendencias() e crSalvarAgora().
-   ════════════════════════════════════════════════════════════════ */
+/* Cronograma de projetos: importa, edita, salva no localStorage e exporta JSON. */
 (function(){
   'use strict';
 
-  /* ---------- CONFIG / PERSISTÊNCIA ---------- */
+  /* ---------- CONFIG / PERSISTÊNCIA LOCAL ---------- */
   var PAGE_SLUG = location.pathname.replace(/\/$/,'').split('/').pop().replace(/\.html?$/i,'') || 'cronograma-projetos';
-  /* ---- ENDPOINTS (ago/2026) ----
-     Antes era `/api/data/<slug>`: UM documento JSON com todos os projetos, onde
-     qualquer save reescrevia o documento inteiro e quem impedia um editor de
-     apagar o trabalho do outro era um merge de 3 vias rodando aqui, no
-     navegador. Proteção no cliente é proteção que depende de o cliente estar
-     atualizado — um browser com a página velha em cache não tinha nenhuma.
-
-     Agora cada projeto é uma LINHA no banco (apps/cronograma) e a escrita é de
-     um projeto por requisição, com o isolamento garantido pelo servidor. */
-  var API_LISTA = '/api/cronograma/projetos';
-  var API_LOG   = '/api/cronograma/log';
-  function apiProjeto(id){ return API_LISTA + '/' + encodeURIComponent(id); }
-  var DRAFT_KEY = 'cr:' + PAGE_SLUG + ':draft';
+  var STORAGE_KEY = 'cr:' + PAGE_SLUG + ':data';
+  var DEMO_URL = '/static/data/cronograma-exemplo.json';
 
   var DATA = null;               // {version, projetos:[...]}
   var CUR_PROJ_ID = null;
-  var ROLE = 'anonymous';
-  var CAN_EDIT = false;
+  var CAN_EDIT = true;
   var PRESENT_MODE = false;      // modo apresentação: esconde ações de edição mesmo pra quem pode editar
   var PRESENT_KEY = 'cr:' + PAGE_SLUG + ':present';
-  var EDIT_BLOCKED = false;      // true = format desconhecido ou 403 do servidor; nunca mais tenta salvar nesta sessão
-  var SRV_EDITAVEL = null;       // o que o SERVIDOR diz sobre poder escrever (null = ainda não sabemos)
-  var SAVE_MODE = 'loading';     // loading|saved|saving|dirty|draft|readonly|error
-  /* O que está na tela e ainda não chegou ao servidor, POR PROJETO:
-       { salvar:[projeto, ...], excluir:[id, ...] }
-
-     É DERIVADO de comparar DATA com BASE (`recalcPendencias`), não um contador
-     de cliques — e a diferença importa. Com a escrita sendo por projeto, "o que
-     falta salvar" é literalmente a lista de requisições a fazer, então o mesmo
-     cálculo alimenta o indicador, o botão e o próprio save; não há como os três
-     discordarem. De quebra, desfazer uma edição até o valor original tira o
-     projeto da lista sozinho — um contador continuaria dizendo "1 alteração não
-     salva" para uma tela idêntica à do servidor. */
+  var EDIT_BLOCKED = false;
+  var SAVE_MODE = 'loading';     // loading|saved|dirty|error
   var PEND = { salvar: [], excluir: [] };
   function nPend(){ return PEND.salvar.length + PEND.excluir.length; }
-  /* BASE = estado do servidor na última sincronização (load, ou save que deu
-     certo), como mapa id-do-projeto -> projKey(projeto). Faz dois trabalhos:
-
-       · diz o que EU mexi (projeto cujo projKey mudou vs. BASE) — é daí que sai
-         a lista de projetos a gravar, em vez de reescrever todos;
-       · é o detector de edição CONCORRENTE: se o servidor devolve um projeto
-         que também não bate com BASE, outra pessoa mexeu nele desde a minha
-         sincronização, e aí não existe resolução automática correta.
-
-     O token de versão do CAS **não** fica guardado aqui de propósito: ele é lido
-     no GET de dentro do próprio ciclo de save, que é o único momento em que ele
-     é válido. Consequência boa: a comparação de conteúdo (BASE) funciona também
-     pra rascunho gravado ANTES desta mudança de armazenamento, que não tem token
-     nenhum — sem isso, o trabalho não salvo de quem estava com a página aberta
-     durante a virada ficaria órfão. */
+  // BASE e PEND mantem o indicador correto mesmo quando o usuario desfaz uma alteracao.
   var BASE = Object.create(null);
   var COLLAPSED = {};            // etapaId -> bool (true = oculta tarefas)
 
   /* ---- visão de Ocupação da equipe (preferências de tela, não de dados) ----
-     Nada daqui entra no payload salvo no servidor: são escolhas de leitura de
+     Nada daqui entra no JSON do cronograma: são escolhas de leitura de
      cada um, então vivem só no localStorage. */
   var VIEW_MODE = 'gantt';       // gantt|ocupacao
   var VIEW_KEY = 'cr:' + PAGE_SLUG + ':view';
@@ -105,7 +57,7 @@
 
   /* ---------- LARGURA DAS COLUNAS ----------
      Preferência de LEITURA, igual às da visão de Ocupação: vive no
-     localStorage de cada um e não entra no payload salvo no servidor.
+     localStorage de cada um e não entra no JSON do cronograma.
      `periodo` é uma largura só pra TODAS as colunas de período: elas são
      homogêneas (uma semana / um mês cada) e o horizonte muda de tamanho
      conforme as datas das tarefas — largura por índice viraria lixo no
@@ -264,21 +216,6 @@
     toast('Colunas de volta à largura padrão.');
   };
 
-  function csrfToken(){
-    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-    return m ? m[1] : '';
-  }
-
-  /* ---------- ROLE (compartilha o cache global com page-manager.js) ---------- */
-  function fetchRole(){
-    if (window.__USER_ROLE_PROMISE) return window.__USER_ROLE_PROMISE;
-    window.__USER_ROLE_PROMISE = fetch('/nav', { credentials: 'same-origin' })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ return (d && d.role) || 'anonymous'; })
-      .catch(function(){ return 'anonymous'; });
-    return window.__USER_ROLE_PROMISE;
-  }
-  function canManage(role){ return role === 'admin' || role === 'editor'; }
   function isEditable(){ return CAN_EDIT && !PRESENT_MODE; }
 
   /* ---------- HELPERS ---------- */
@@ -576,9 +513,7 @@
      ⚠ Nada disto é gravado. O amarelo é recalculado a cada render a partir das
      datas, então aparece e SOME sozinho quando a tarefa é reprogramada ou a
      Data de Revisão volta atrás. Escrever o derivado em `t.realizado`
-     transformaria abrir a página em escrita no banco (bump de `version`, linha
-     no log, 412 entre pessoas que só abriram a aba) e congelaria um valor cujo
-     sentido é acompanhar as datas. */
+     transformaria abrir a página em alteração persistida no localStorage e congelaria um valor cujo sentido é acompanhar as datas. */
   function realizadoAt(t, v, pv){
     var arr = marcasPorIndice(t, pv);
     var derivada = v.cor;                       // 'atrasada' ou null
@@ -822,15 +757,11 @@
 
   /* ---------- PERSISTÊNCIA ---------- */
   function emptyData(){ return { version:1, projetos:[] }; }
-  /* Fatorado de normalizeData() porque também é a forma CANÔNICA do projeto:
-     projKey() serializa por aqui pra comparar versões, então a ordem das
-     chaves nunca entra na conta. Sem isso, uma tarefa criada pelo formulário
-     (que monta as chaves noutra ordem, com o id no fim) pareceria diferente
-     da mesma tarefa devolvida pelo servidor, e recalcPendencias() acusaria
-     alteração que não existe. */
+  /* Forma canonica do projeto: evita diferenca falsa quando o JSON vem em outra
+     ordem de chaves. */
   /* Marcas de período do Realizado: {'YYYY-MM-DD': marca}. Sanitiza chave
      (data válida) e valor (marca conhecida) porque o payload pode vir de um
-     JSON importado, de um rascunho antigo no localStorage ou de outra versão
+     JSON importado, de um localStorage antigo ou de outra versão
      da página.
      As chaves saem ORDENADAS de propósito: normalizeProjeto é a forma canônica
      que o projKey() serializa pra comparar com o BASE, e duas ordens de chave
@@ -856,27 +787,8 @@
 
      Formato de cada entrada: {fato, causa, acao, editadoPor, editadoEm}.
 
-     `editadoPor`/`editadoEm` são carimbo do SERVIDOR (apps/cronograma/fca.py).
-     Três consequências, todas load-bearing:
-
-       · este arquivo NUNCA os preenche. Enquanto a entrada não passou por um
-         save ela é exibida como "ainda não gravado", em vez de inventar um autor
-         que o banco não registrou;
-       · quando o texto muda, o carimbo antigo é DESCARTADO na hora (ver
-         crFcaPeriodo). Manter o carimbo velho ao lado de texto novo seria a
-         mentira oposta: "editado por Élida em 01/08" embaixo do que eu acabei
-         de digitar;
-       · eles ficam FORA da chave de comparação (ver contentKey). O servidor
-         carimba no meio da gravação, então incluí-los faria o payload que volta
-         do banco divergir do que este navegador mandou — projeto "não salvo"
-         logo depois de salvo e, no save seguinte, falso conflito de edição
-         simultânea.
-
-     Entrada com os três campos em branco é DESCARTADA: carimbo sem conteúdo não
-     é registro, e mantê-la faria a pendência (fcaPendencias) contar como
-     preenchido um FCA que ninguém escreveu. O servidor aplica a MESMA regra —
-     as duas pontas precisam concordar, senão o normalizado daqui e o guardado
-     no banco divergem e reabrem o falso-sujo acima. */
+     Entrada com os três campos em branco é descartada; carimbo sem conteúdo não
+     é registro. */
   var FCA_CAMPOS = ['fato','causa','acao'];
   function fcaTexto(v){ return typeof v === 'string' ? v : (v==null ? '' : String(v)); }
   function fcaVazio(e){
@@ -975,7 +887,7 @@
               fim: t.fim || '',
               /* Invariante: havendo período marcado, o status É a marca mais
                  recente. Reafirmado aqui pra valer em TODO caminho de entrada
-                 (payload do servidor, import de JSON, planilha), inclusive
+                 (localStorage, import de JSON, planilha), inclusive
                  arquivo editado à mão — onde os dois poderiam vir
                  discordando e a tela mostraria uma coisa e o KPI outra. */
               status: statusDeMarcas({ realizado:realizado }) || statusGuardado,
@@ -987,10 +899,7 @@
                  onde guardar a segunda reprogramação — a terceira sobrescrevia a
                  primeira, e o histórico só sabia dizer "o FCA mudou", nunca de
                  qual reprogramação. O campo sai do payload por ficar fora deste
-                 literal: quem tiver o antigo no banco perde a chave no primeiro
-                 save do projeto (checado antes de remover: nenhuma tarefa em
-                 produção tinha texto ali, e o log de revisões guarda snapshot
-                 das versões anteriores de qualquer forma). */
+                 literal: quem importar JSON antigo perde essa chave na normalização; o formato atual guarda o FCA somente por período. */
               fcaPorPeriodo: normFcaPeriodo(t.fcaPorPeriodo),
               comentarios: t.comentarios || '',
             };
@@ -1006,59 +915,34 @@
     }
     return out;
   }
-  /* ---------- RASCUNHO LOCAL ----------
-     Com save explícito o rascunho deixou de ser só um consolo pra queda de
-     rede: ele é a ÚNICA cópia do trabalho entre a primeira edição e o clique
-     em Salvar. Fechar a aba, F5 ou o Windows reiniciando cai aqui.
-
-     Guarda `base` junto (o mapa id-do-projeto → conteúdo que o servidor tinha
-     na última sincronização) e isso é load-bearing: na volta, o
-     recalcPendencias() precisa saber o que ERA do servidor pra descobrir o que
-     EU mudei. Restaurar um rascunho com o BASE de agora faria toda edição que
-     OUTRA pessoa fez no meio do caminho parecer minha — e o meu save levaria a
-     versão velha por cima da dela. */
-  var DRAFT_V = 2;
-  function saveDraftLocal(){
+  /* ---------- DADOS LOCAIS ---------- */
+  function saveLocal(){
     try{
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ v:DRAFT_V, ts:Date.now(), dirty:nPend(), data:DATA, base:BASE }));
-    }catch(e){}   // quota estourada: sem rascunho, mas a tela continua funcionando
+      DATA = normalizeData(DATA);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+      BASE = snapshotBase(DATA);
+      recalcPendencias();
+      setSaveMode('saved');
+      return true;
+    }catch(e){
+      console.warn('[cronograma] falha ao salvar localmente', e);
+      setSaveMode('error');
+      toast('Não foi possível salvar no localStorage deste navegador.', true);
+      return false;
+    }
   }
-  /* Devolve sempre o envelope {v, ts, dirty, data, base} — ou null.
-     Rascunho da versão antiga (o DATA cru, sem envelope) entra com dirty:0: é
-     a leitura segura, porque sem `base` não há como saber o que era meu, e
-     dirty:0 mantém ele fora do fluxo de restauração. */
-  function loadDraftLocal(){
+  function loadLocal(){
     try{
-      var raw = localStorage.getItem(DRAFT_KEY);
+      var raw = localStorage.getItem(STORAGE_KEY);
       if(!raw) return null;
-      var v = JSON.parse(raw);
-      if(!v || typeof v !== 'object') return null;
-      if(v.v === DRAFT_V && v.data) return { v:v.v, ts:v.ts||null, dirty:(+v.dirty||0), data:v.data, base:(v.base&&typeof v.base==='object')?v.base:null };
-      if(Array.isArray(v.projetos)) return { v:1, ts:null, dirty:0, data:v, base:null };
+      return normalizeData(JSON.parse(raw));
+    }catch(e){
+      console.warn('[cronograma] falha ao ler localStorage', e);
       return null;
-    }catch(e){ return null; }
+    }
   }
 
-  /* ---------- O QUE FALTA GRAVAR ----------
-     Substituiu o merge de 3 vias que existia aqui até ago/2026. Aquele merge
-     montava o documento inteiro da página (meus projetos enxertados no payload
-     fresco do servidor) porque o endpoint só sabia gravar tudo de uma vez. Com
-     escrita por projeto, o cálculo vira simplesmente "quais projetos divergem
-     do que o servidor tinha na minha última sincronização" — e o que não
-     divergir não é tocado, então não há como atropelar o projeto de ninguém. */
-
-  /* Chave de CONTEÚDO de um projeto já normalizado. Tira o carimbo de autoria do
-     FCA por período (editadoPor/editadoEm) antes de serializar, e isso é
-     load-bearing: quem escreve esses dois campos é o SERVIDOR, no meio da
-     gravação (apps/cronograma/fca.py). Se entrassem na chave, o projeto voltaria
-     do banco diferente do que este navegador mandou — apareceria como "não
-     salvo" imediatamente depois de salvo, e no save seguinte o `planejarSave`
-     leria a diferença como "outra pessoa editou" e abriria conflito com quem
-     nunca existiu. A pergunta que esta chave responde é "alguém mudou o
-     CONTEÚDO?", e carimbo não é conteúdo.
-
-     Vale pra qualquer campo que o servidor carimbe daqui pra frente: some com
-     ele aqui, ou o falso conflito volta. */
+  /* Chave de conteudo: carimbos locais do FCA nao contam como alteracao do plano. */
   function contentKey(np){
     return JSON.stringify(np, function(k, v){
       return (k === 'editadoPor' || k === 'editadoEm') ? undefined : v;
@@ -1075,17 +959,8 @@
     return m;
   }
 
-  /* Recalcula PEND comparando DATA (tela) com BASE (servidor na última
-     sincronização). Chamado a cada mutação, depois do load e depois do save —
-     nunca dentro do render(), que roda a cada clique em célula: `projKey`
-     serializa o projeto inteiro, e fazer isso 5 vezes por repintura da tabela
-     seria trabalho jogado fora.
-
-       em DATA e sem BASE       → criei    → POST com If-None-Match: *
-       em DATA e mudou vs BASE  → editei   → POST com If-Match: <versão>
-       em BASE e fora de DATA   → excluí   → DELETE com If-Match: <versão>
-       em DATA e igual a BASE   → não mexi → não sai requisição nenhuma
-  */
+  /* Recalcula o que mudou desde o ultimo save local. Fica fora do render porque
+     serializa projetos inteiros. */
   function recalcPendencias(){
     var salvar = [], excluir = [], vistos = Object.create(null);
     ((DATA && DATA.projetos) || []).forEach(function(p){
@@ -1098,72 +973,19 @@
     PEND = { salvar: salvar, excluir: excluir };
   }
 
-  /* Confronta as pendências com o estado FRESCO do servidor, logo antes de
-     gravar. Devolve o que pode ir e o que virou conflito.
-
-     Um projeto é conflito quando o servidor tem, pra ele, conteúdo que também
-     não bate com BASE: significa que outra pessoa mexeu nele desde a minha
-     sincronização. Aí não existe resolução automática correta, e a escolha aqui
-     é NÃO gravar e perguntar — diferente do merge antigo, que fazia a minha
-     versão prevalecer e avisava depois. A precisão nova é o que permite isso: o
-     conflito é de um projeto identificado, não do documento todo, então os
-     outros projetos seguem sendo gravados normalmente.
-
-     `versoes` vem do mesmo GET, então o If-Match que sai daqui é sempre o token
-     do estado que acabamos de examinar. Se alguém gravar entre este GET e o
-     POST, o servidor devolve 412 — a rede de segurança pra corrida que este
-     cálculo não tem como ver. */
-  function planejarSave(srvById, versoes){
-    var gravar = [], apagar = [], conflitos = [];
-    PEND.salvar.forEach(function(p){
-      var deles = srvById[p.id];
-      var antes = BASE[p.id];
-      if(antes === undefined){
-        // criei um projeto e o servidor já tem esse id: colisão de uid(), coisa
-        // de bilhete de loteria. Vira conflito em vez de sobrescrever.
-        if(deles) conflitos.push({ id:p.id, nome:p.nome, motivo:'criado' });
-        else gravar.push({ projeto:p, criar:true, versao:null });
-        return;
-      }
-      if(!deles){
-        // eu editei um projeto que outra pessoa EXCLUIU. Regravar ressuscitaria
-        // caladamente algo que alguém decidiu apagar.
-        conflitos.push({ id:p.id, nome:p.nome, motivo:'excluido' });
-        return;
-      }
-      if(projKey(deles) !== antes){
-        conflitos.push({ id:p.id, nome:p.nome, motivo:'editado' });
-        return;
-      }
-      gravar.push({ projeto:p, criar:false, versao:versoes[p.id] || null });
-    });
-    PEND.excluir.forEach(function(id){
-      var deles = srvById[id];
-      if(!deles) return;                       // já não está lá: nada a fazer
-      if(projKey(deles) !== BASE[id]){
-        conflitos.push({ id:id, nome:(deles.nome || id), motivo:'editado-e-eu-excluí' });
-        return;
-      }
-      apagar.push({ id:id, nome:deles.nome, versao:versoes[id] || null });
-    });
-    return { gravar:gravar, apagar:apagar, conflitos:conflitos };
-  }
-
   function setSaveMode(m){ SAVE_MODE = m; renderSaveUI(); }
-  /* Indicador + botão Salvar saem da MESMA função de propósito: os dois falam
-     do mesmo estado (SAVE_MODE + as pendências), e tê-los em dois lugares foi como
-     chegou a um botão habilitado ao lado de um "Salvo no servidor". */
+  /* Indicador e botao usam a mesma fonte de estado. */
   function renderSaveUI(){
     var el = document.getElementById('cr-saveind');
     if(el){
       var MAP = {
-        loading: {t:'Carregando…', c:''},
-        saved:   {t:'Salvo no servidor', c:'ok'},
-        saving:  {t:'Salvando…', c:''},
+        loading: {t:'Carregando...', c:''},
+        saved:   {t:'Salvo neste navegador', c:'ok'},
+        saving:  {t:'Salvando...', c:''},
         dirty:   {t:'', c:'warn'},   // o texto tem contagem, montado abaixo
-        draft:   {t:'Não salvo — só neste navegador', c:'warn'},
+        draft:   {t:'Salvo somente neste navegador', c:'warn'},
         readonly:{t:'Modo leitura', c:'warn'},
-        error:   {t:'Falha ao carregar dados', c:'err'},
+        error:   {t:'Falha ao salvar localmente', c:'err'},
       };
       var s = MAP[SAVE_MODE] || MAP.loading;
       var n = nPend();
@@ -1174,437 +996,25 @@
     }
     var btn = document.getElementById('cr-btnsave');
     if(btn){
-      // escondido pra quem não pode gravar: um botão desabilitado pra sempre só
-      // levanta a pergunta "por que não funciona?"
       btn.style.display = (CAN_EDIT && !EDIT_BLOCKED) ? '' : 'none';
-      btn.disabled = !nPend() || SAVE_MODE === 'saving';
-      btn.innerHTML = '<span class="material-symbols-outlined">save</span>Salvar' + (nPend() ? ' ('+nPend()+')' : '');
+      btn.disabled = SAVE_MODE === 'saving';
+      btn.innerHTML = '<span class="material-symbols-outlined">save</span>Salvar';
     }
   }
 
   function loadData(){
-    return fetch(API_LISTA, { credentials:'same-origin' }).then(function(r){
-      if(r.status === 403){
-        EDIT_BLOCKED = true; setSaveMode('readonly');
-        var d403 = loadDraftLocal();
-        DATA = normalizeData((d403 && d403.data) || emptyData());
-        BASE = snapshotBase(DATA);
-        recalcPendencias();
-        return;
-      }
-      if(!r.ok) throw new Error('http '+r.status);
-      return r.json().then(function(payload){
-        if(payload && typeof payload === 'object' && 'version' in payload){
-          if(payload.version !== 1){
-            EDIT_BLOCKED = true;
-            DATA = normalizeData(payload); // exibição best-effort, nunca resalva
-            BASE = snapshotBase(DATA);
-            recalcPendencias();
-            setSaveMode('readonly');
-            toast('Formato de dados desconhecido (version='+payload.version+'). Exibindo em modo leitura pra não corromper.', true);
-            return;
-          }
-          DATA = normalizeData(payload);
-          BASE = snapshotBase(DATA);   // ponto de sincronização: daqui pra frente, diff é meu
-          /* O servidor diz se ESTA sessão pode escrever, e isso vale mais que o
-             papel lido do /nav: a permissão sai do roles_visible/owner_user da
-             Page (ver apps/cronograma/views.py). Guardado pra entrar no CAN_EDIT
-             no init — assim as ações de edição nem aparecem pra quem levaria 403. */
-          SRV_EDITAVEL = (payload.editavel === true);
-          recalcPendencias();
-          setSaveMode('saved');
-        } else {
-          // resposta sem envelope: trata como vazio em vez de quebrar a tela
-          DATA = emptyData();
-          BASE = snapshotBase(DATA);
-          recalcPendencias();
-          setSaveMode('saved');
-        }
-      });
-    }).catch(function(e){
-      console.warn('[cronograma] falha ao carregar', e);
-      var draft = loadDraftLocal();
-      // normaliza o rascunho: vem do localStorage, então passa pelo mesmo
-      // safeId()/shape que um JSON importado — e evita quebrar em DATA.projetos
-      // se o rascunho for de uma versão antiga da página.
-      DATA = draft ? normalizeData(draft.data) : emptyData();
-      /* BASE sai do rascunho, não do servidor (que não respondeu): é o mapa do
-         que o servidor tinha na última sincronização DESTE navegador, então o
-         próximo save continua sabendo quais projetos são meus — e só esses são
-         gravados. Sem `base` (rascunho gravado por uma versão antiga da
-         página), cai no mapa vazio: aí cada projeto do rascunho conta como
-         alteração minha, que é a leitura conservadora pro trabalho que nunca
-         chegou ao servidor. Se BASE fosse o próprio rascunho, os projetos
-         apareceriam como "não mexi" e a versão do servidor venceria — jogando
-         fora exatamente o que o rascunho existe pra proteger. */
-      BASE = (draft && draft.base) ? draft.base : Object.create(null);
-      recalcPendencias();
-      setSaveMode(draft ? 'draft' : 'error');
-      toast('Não foi possível carregar os dados do servidor.' + (draft?' Mostrando rascunho local.':''), true);
-    });
-  }
-
-  /* ---------- RECUPERAÇÃO DE RASCUNHO ----------
-     Sem gravação automática, o caminho "editei, fechei a aba, perdi tudo" passa
-     a existir. O beforeunload cobre o fechamento distraído, mas não cobre queda
-     de energia nem o navegador morrendo — pra esses, o rascunho é a rede.
-
-     Oferece em vez de aplicar sozinho: entre o rascunho e agora, o servidor
-     pode ter avançado, e trocar a tela caladamente por uma versão de terça
-     esconderia isso de quem abriu a página. A restauração devolve TAMBÉM o BASE
-     do rascunho, que é o que faz o save seguinte gravar só os projetos que eram
-     realmente meus. */
-  function mapsIguais(a, b){
-    var ka = Object.keys(a), kb = Object.keys(b);
-    if(ka.length !== kb.length) return false;
-    for(var i=0;i<ka.length;i++){ if(a[ka[i]] !== b[ka[i]]) return false; }
-    return true;
-  }
-  /* Devolve true se abriu o aviso (há trabalho não salvo a decidir), false se
-     não havia nada a restaurar. Quem chama usa isso pra ressincronizar o
-     rascunho — ver init(). */
-  function offerDraftRestore(){
-    if(!CAN_EDIT || EDIT_BLOCKED) return false;
-    var d = loadDraftLocal();
-    if(!d || !d.dirty || !d.data) return false;
-    var draftData = normalizeData(d.data);
-    // nada de novo no rascunho (ex.: outra aba já salvou): não incomoda ninguém
-    if(mapsIguais(snapshotBase(draftData), BASE)) return false;
-    var nProj = (draftData.projetos||[]).length;
-    var body = document.createElement('div');
-    body.innerHTML =
-      '<div class="cr-impmeta">Este navegador tem <b>'+d.dirty+' alteração(ões)</b> que nunca chegaram ao servidor' +
-        (d.ts ? ', a última em <b>'+esc(fmtDataHora(d.ts))+'</b>' : '') + '.</div>' +
-      '<div class="cr-impcard"><div class="cr-impmeta">O rascunho tem <b>'+nProj+'</b> projeto(s). ' +
-        'A tela agora mostra o que está no <b>servidor</b>.</div></div>' +
-      '<div class="cr-impmeta"><b>Restaurar</b> traz o rascunho de volta pra tela — nada é gravado até você clicar em Salvar, ' +
-        'e nesse momento só os projetos que VOCÊ mexeu entram por cima do servidor.<br>' +
-        '<b>Descartar</b> apaga o rascunho e mantém o que está no servidor.</div>';
-    openModal('Alterações não salvas neste navegador', body, [
-      {label:'Descartar rascunho', cls:'danger', fn:function(){
-        saveDraftLocal(); closeModal();   // regrava com as pendências atuais (zero)
-        toast('Rascunho descartado. A tela mostra o que está no servidor.');
-      }},
-      {label:'Restaurar', cls:'primary', fn:function(){
-        DATA = draftData;
-        BASE = d.base || Object.create(null);
-        recalcPendencias();
-        ensureCurrentProject(); closeModal();
-        saveDraftLocal();
-        setSaveMode('dirty'); render();
-        toast('Rascunho restaurado — clique em Salvar para gravar no servidor.');
-      }},
-    ]);
-    return true;
-  }
-
-  /* ---------- CICLO DE SAVE ----------
-     1. GET fresco da lista (estado real do servidor + token de versão de cada
-        projeto).
-     2. planejarSave() separa o que pode ir do que virou conflito.
-     3. Uma requisição POR PROJETO, em série.
-     4. O que gravou entra em BASE; o que conflitou volta pro usuário decidir.
-
-     Em série, e não em paralelo: são no máximo uns poucos projetos por save, e
-     serializar dá relato exato de qual falhou — com Promise.all, uma falha no
-     meio deixa o resto num estado que ninguém consegue narrar depois. */
-
-  /* cache:'no-store' é load-bearing: o plano de escrita é calculado sobre esta
-     resposta. Uma resposta servida do cache do browser faria a gente comparar
-     com estado velho e mandar If-Match de uma versão que já não é a atual —
-     412 em loop, na melhor das hipóteses. */
-  function lerServidor(){
-    return fetch(API_LISTA, { credentials:'same-origin', cache:'no-store' })
-      .then(function(r){
-        if(r.status === 403){
-          EDIT_BLOCKED = true; CAN_EDIT = false; setSaveMode('readonly');
-          toast('Sem permissão para salvar — modo leitura.', true); render();
-          return null;
-        }
-        if(!r.ok) throw new Error('GET http '+r.status);
-        return r.json();
-      });
-  }
-
-  function gravarProjeto(item){
-    var headers = { 'Content-Type':'application/json', 'X-CSRFToken': csrfToken() };
-    /* ⚠️ O ETag vai ENTRE ASPAS. O `parse_etags` do Django (seguindo o RFC 9110)
-       só reconhece ETag citado; token cru cai na lista vazia e o CAS — que falha
-       fechado — recusa a escrita. O sintoma é 412 em TODO save, que parece
-       conflito de edição e é erro de formato. */
-    if(item.criar) headers['If-None-Match'] = '*';
-    else if(item.versao) headers['If-Match'] = '"' + item.versao + '"';
-    else headers['If-Match'] = '*';   // existe, versão desconhecida: grava se ainda existir
-    var enviado = normalizeProjeto(item.projeto);
-    return fetch(apiProjeto(item.projeto.id), {
-      method:'POST', credentials:'same-origin', cache:'no-store',
-      headers: headers, body: JSON.stringify(enviado),
-    }).then(function(r){
-      /* `enviado` sai do escopo junto com a requisição de propósito: é o
-         conteúdo EXATO que o servidor passou a ter, então é dele que sai o BASE
-         novo. Recalcular do objeto em DATA marcaria como "já sincronizada" uma
-         célula clicada durante o envio — e ela sumiria calada no save seguinte.
-
-         ⚠ Quem transforma isto em BASE é o contentKey (ver o consumidor em
-         pushToServer), não um JSON.stringify seco: o servidor carimba autoria no
-         FCA por período durante a gravação, então o que ele guardou tem campos
-         que este `enviado` não tem. */
-      return { item:item, status:r.status, enviado:enviado };
-    });
-  }
-
-  function excluirProjeto(item){
-    var headers = { 'X-CSRFToken': csrfToken() };
-    headers['If-Match'] = item.versao ? '"' + item.versao + '"' : '*';
-    return fetch(apiProjeto(item.id), {
-      method:'DELETE', credentials:'same-origin', cache:'no-store', headers: headers,
-    }).then(function(r){ return { item:item, status:r.status }; });
-  }
-
-  /* Executa a fila em série devolvendo a lista de resultados. */
-  function emSerie(itens, fn){
-    var out = [];
-    return itens.reduce(function(chain, it){
-      return chain.then(function(){
-        return fn(it).then(function(res){ out.push(res); });
-      });
-    }, Promise.resolve()).then(function(){ return out; });
-  }
-
-  function pushToServer(){
-    return lerServidor().then(function(payload){
-      if(!payload) return;
-      // Mesma regra do load: formato que esta versão da página não entende nunca
-      // é sobrescrito.
-      if(payload && typeof payload === 'object' && 'version' in payload && payload.version !== 1){
-        EDIT_BLOCKED = true; setSaveMode('readonly');
-        toast('O servidor está com dados em formato desconhecido (version='+payload.version+'). Save cancelado pra não corromper.', true);
-        return;
-      }
-      var srv = normalizeData({ version:1, projetos:(payload.projetos || []) });
-      var srvById = Object.create(null);
-      srv.projetos.forEach(function(p){ srvById[p.id] = p; });
-      var versoes = payload.versoes || {};
-
-      var plano = planejarSave(srvById, versoes);
-      if(!plano.gravar.length && !plano.apagar.length && !plano.conflitos.length){
-        // nada divergindo: adota o servidor pra puxar o que outros fizeram
-        adotarServidor(srv);
-        setSaveMode('saved');
-        toast('Nada para salvar — a tela já está igual ao servidor.');
-        return;
-      }
-
-      var conflitos = plano.conflitos.slice();
-      var gravados = 0, apagados = 0, erros = [];
-
-      return emSerie(plano.gravar, gravarProjeto).then(function(res){
-        res.forEach(function(r){
-          if(r.status === 200 || r.status === 201){
-            BASE[r.item.projeto.id] = contentKey(r.enviado);
-            gravados++;
-          } else if(r.status === 412){
-            // corrida: alguém gravou entre o nosso GET e este POST
-            conflitos.push({ id:r.item.projeto.id, nome:r.item.projeto.nome, motivo:'editado' });
-          } else if(r.status === 403){
-            EDIT_BLOCKED = true; CAN_EDIT = false;
-          } else {
-            erros.push((r.item.projeto.nome || r.item.projeto.id) + ' (HTTP ' + r.status + ')');
-          }
-        });
-        return emSerie(plano.apagar, excluirProjeto);
-      }).then(function(res){
-        res.forEach(function(r){
-          if(r.status === 200){ delete BASE[r.item.id]; apagados++; }
-          else if(r.status === 412){
-            conflitos.push({ id:r.item.id, nome:r.item.nome, motivo:'editado-e-eu-excluí' });
-          } else if(r.status === 403){
-            EDIT_BLOCKED = true; CAN_EDIT = false;
-          } else {
-            erros.push((r.item.nome || r.item.id) + ' (HTTP ' + r.status + ')');
-          }
-        });
-
-        recalcPendencias();
-        saveDraftLocal();
-
-        if(EDIT_BLOCKED){
-          setSaveMode('readonly');
-          toast('Sem permissão para salvar — modo leitura.', true);
-          render();
-          return;
-        }
-
-        /* Só adota o servidor quando NÃO sobrou pendência: adotar com pendência
-           aberta jogaria fora a edição que ainda não subiu. Quando adota, traz
-           de brinde o projeto que outra pessoa criou ou alterou enquanto eu
-           trabalhava — que é como isso aparecia na tela no modelo antigo. */
-        if(!nPend() && !conflitos.length && !erros.length){
-          return lerServidor().then(function(fresco){
-            if(fresco && fresco.version === 1){
-              adotarServidor(normalizeData({ version:1, projetos:(fresco.projetos||[]) }));
-            }
-            setSaveMode('saved');
-            render();
-            toast(resumoDoSave(gravados, apagados));
-          });
-        }
-
-        setSaveMode(nPend() ? 'dirty' : 'saved');
-        render();
-        if(erros.length){
-          toast('Falha ao salvar: ' + erros.join(', ') + '. As alterações seguem neste navegador.', true);
-        } else if(gravados || apagados){
-          toast(resumoDoSave(gravados, apagados));
-        }
-        if(conflitos.length) resolverConflitos(conflitos);
-      });
-    }).catch(function(e){
-      console.warn('[cronograma] falha ao salvar', e);
-      recalcPendencias();
-      setSaveMode(nPend() ? 'dirty' : 'draft');
-      toast('Não foi possível salvar no servidor — alterações mantidas só neste navegador. Clique em Salvar para tentar de novo.', true);
-    });
-  }
-
-  function resumoDoSave(gravados, apagados){
-    var p = [];
-    if(gravados) p.push(gravados + (gravados===1 ? ' projeto salvo' : ' projetos salvos'));
-    if(apagados) p.push(apagados + (apagados===1 ? ' excluído' : ' excluídos'));
-    return (p.join(' · ') || 'Nada alterado') + ' no servidor.';
-  }
-
-  function adotarServidor(srv){
-    DATA = srv;
+    DATA = loadLocal() || emptyData();
     BASE = snapshotBase(DATA);
     recalcPendencias();
-    saveDraftLocal();
-    ensureCurrentProject();
+    setSaveMode('saved');
+    return Promise.resolve();
   }
 
-  /* ---------- CONFLITO DE EDIÇÃO SIMULTÂNEA ----------
-     Aqui está o ganho concreto da escrita por projeto. No modelo antigo o
-     conflito era do documento inteiro, sem resolução possível: a minha versão
-     prevalecia e o aviso vinha DEPOIS de o trabalho da outra pessoa já ter sido
-     sobrescrito. Agora o conflito é de um projeto identificado, os outros já
-     foram gravados, e nada foi sobrescrito ainda — então dá pra perguntar.
-
-     E dá pra dizer QUEM mexeu: o log de edições (`/api/cronograma/log`) tem
-     autor, horário e resumo. É a diferença entre "houve um conflito" e "a Ana
-     alterou 3 marcas de período às 14:32". */
-  function resolverConflitos(conflitos){
-    var body = document.createElement('div');
-    body.innerHTML = '<div class="cr-impmeta">Carregando quem alterou…</div>';
-    openModal('Edição simultânea', body, [{label:'Fechar', cls:'ghost', fn:closeModal}]);
-
-    // uma consulta por projeto conflitado (são poucos, por definição)
-    Promise.all(conflitos.map(function(c){
-      return fetch(API_LOG + '?projeto=' + encodeURIComponent(c.id) + '&limit=1',
-                   { credentials:'same-origin', cache:'no-store' })
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(d){
-          var it = d && d.itens && d.itens[0];
-          return { c:c, quem: it && it.autor, quando: it && it.quando, oque: it && it.resumo };
-        })
-        .catch(function(){ return { c:c }; });
-    })).then(function(infos){
-      var MOTIVO = {
-        'editado': 'foi alterado por outra pessoa depois que esta página carregou',
-        'excluido': 'foi <b>excluído</b> por outra pessoa — regravar ressuscitaria algo que alguém decidiu apagar',
-        'editado-e-eu-excluí': 'você excluiu aqui, mas outra pessoa alterou no servidor',
-        'criado': 'já existe no servidor com este mesmo identificador',
-      };
-      var html = '<div class="cr-impmeta">O que você mexeu nos <b>outros</b> projetos já foi salvo. ' +
-        'Nestes, <b>nada foi gravado</b> — a alteração da outra pessoa está intacta:</div>';
-      infos.forEach(function(i){
-        html += '<div class="cr-impcard" style="border-left-color:var(--cr-red)">' +
-          '<h4>'+esc(i.c.nome || i.c.id)+'</h4>' +
-          '<div class="cr-impmeta">'+(MOTIVO[i.c.motivo] || 'está em conflito')+'.</div>' +
-          (i.quem ? '<div class="cr-impmeta">Última alteração: <b>'+esc(i.quem)+'</b>' +
-              (i.quando ? ' em <b>'+esc(fmtDataHora(Date.parse(i.quando)))+'</b>' : '') +
-              (i.oque ? ' — '+esc(i.oque) : '') + '</div>' : '') +
-          '</div>';
-      });
-      html += '<div class="cr-impmeta"><b>Manter a minha versão</b> grava a sua por cima ' +
-        '(a da outra pessoa fica no histórico e é recuperável).<br>' +
-        '<b>Descartar a minha</b> recarrega o que está no servidor e perde o que você fez ' +
-        'nesses projetos.</div>';
-      body.innerHTML = html;
-      var act = document.getElementById('cr-mact');
-      act.innerHTML = '';
-      [
-        {label:'Descartar a minha', cls:'danger', fn:function(){
-          closeModal();
-          /* Zera o BASE dos projetos conflitados e recarrega: sem isso eles
-             continuariam divergindo e voltariam a conflitar no próximo save. */
-          init(true);
-        }},
-        {label:'Manter a minha versão', cls:'primary', fn:function(){
-          closeModal();
-          /* Segundo save: o GET fresco do ciclo traz o conteúdo da outra pessoa,
-             que passa a ser o BASE destes projetos — então eles deixam de ser
-             conflito e viram edição normal, gravada com If-Match válido.
-             É "a minha prevalece", mas agora como DECISÃO, não como default. */
-          lerServidor().then(function(fresco){
-            if(!fresco) return;
-            var srvById = Object.create(null);
-            normalizeData({version:1, projetos:(fresco.projetos||[])}).projetos
-              .forEach(function(p){ srvById[p.id] = p; });
-            /* Adotar a versão DELES como meu BASE é o truque: o projeto deixa de
-               ser conflito e passa a ser "editei" — grava com If-Match válido no
-               ciclo seguinte. Se eles excluíram, tirar do BASE transforma em
-               "criei", e o projeto é recriado. Cada motivo de conflito converge
-               pro caminho certo sem `if` nenhum. */
-            conflitos.forEach(function(c){
-              if(srvById[c.id]) BASE[c.id] = projKey(srvById[c.id]);
-              else delete BASE[c.id];
-            });
-            recalcPendencias();
-            persist();
-          });
-        }},
-      ].forEach(function(a){
-        var b = document.createElement('button');
-        b.className = 'cr-btn ' + a.cls; b.textContent = a.label; b.onclick = a.fn;
-        act.appendChild(b);
-      });
-    });
-  }
-
-  /* ---------- "MUDOU NA TELA" × "GRAVAR NO SERVIDOR" ----------
-     Até ago/2026 eram a mesma coisa: todo CRUD chamava persist(), que ia direto
-     ao servidor. Agora são dois passos.
-
-     markDirty() = mudou na tela. Recalcula o que está pendente, grava o
-     rascunho local e acende o botão Salvar. NÃO toca no servidor.
-
-     O que isso muda com mais de uma pessoa editando: a janela em que duas
-     sessões podem divergir era o tempo de um round-trip (~1s) e passou a ser o
-     intervalo entre saves — na prática, a sessão de trabalho inteira. O que
-     mudou desde então é a QUALIDADE dessa janela:
-
-       · projetos diferentes nunca se atropelam — a escrita é por projeto e o
-         isolamento é garantido pelo servidor, não por merge no navegador;
-       · no MESMO projeto nada é sobrescrito em silêncio. O save detecta que
-         alguém mexeu, NÃO grava, e pergunta — dizendo quem alterou, quando e o
-         quê (resolverConflitos, alimentado pelo log de edições).
-
-     Ou seja: o save manual alarga a janela, mas o modelo novo tirou dela a
-     consequência que doía. Sobrou uma escolha consciente do usuário, em vez de
-     perda de trabalho descoberta semanas depois. */
+  /* ---------- SALVAR LOCAL ---------- */
   function markDirty(){
     recalcPendencias();
-    saveDraftLocal();
-    if(!CAN_EDIT || EDIT_BLOCKED){ setSaveMode('readonly'); return; }
-    /* Nos DOIS sentidos: com pendência vira 'dirty', e sem pendência VOLTA pra
-       'saved'. O caminho de volta existe porque a pendência é derivada — desfazer
-       uma marca até o valor original tira o projeto da lista, e sem isto o
-       indicador ficava preso em "0 projetos não salvos".
-       'draft'/'error' são preservados de propósito: eles querem dizer "o servidor
-       não respondeu", e nada do que o usuário faz na tela torna aquilo salvo. */
-    if(nPend()) setSaveMode('dirty');
-    else if(SAVE_MODE === 'dirty') setSaveMode('saved');
-    else renderSaveUI();
+    if(!CAN_EDIT || EDIT_BLOCKED){ setSaveMode('error'); return; }
+    saveLocal();
   }
 
   /* Os saves são serializados numa corrente: dois cliques rápidos disputariam
@@ -1613,17 +1023,14 @@
      argumento do .then() é o que impede uma falha de travar a corrente. */
   var SAVE_CHAIN = Promise.resolve();
   function persist(){
-    saveDraftLocal();
-    if(!CAN_EDIT || EDIT_BLOCKED){ setSaveMode('readonly'); return Promise.resolve(); }
-    setSaveMode('saving');
-    function elo(){ return pushToServer(); }
+    if(!CAN_EDIT || EDIT_BLOCKED){ setSaveMode('error'); return Promise.resolve(); }
+    function elo(){ saveLocal(); return Promise.resolve(); }
     SAVE_CHAIN = SAVE_CHAIN.then(elo, elo);
     return SAVE_CHAIN;
   }
   window.crSalvarAgora = function(){
     if(!CAN_EDIT || EDIT_BLOCKED) return;
-    if(!nPend()){ toast('Nada para salvar.'); return; }
-    persist();
+    persist().then(function(){ toast('Cronograma salvo neste navegador.'); });
   };
   /* Ctrl+S / Cmd+S — o gesto que todo mundo já tem no dedo pra "encerrei, grava".
      O preventDefault vale mesmo sem alteração pendente: sem ele o navegador abre
@@ -1636,8 +1043,7 @@
     window.crSalvarAgora();
   });
   /* Última barreira antes de perder trabalho: o navegador mostra o próprio
-     diálogo de confirmação (o texto é dele, não nosso). Não cobre queda de
-     energia nem crash — pra esses é o rascunho + offerDraftRestore(). */
+     diálogo de confirmação (o texto é dele, não nosso). Não cobre queda de energia nem crash; para esses casos, cada edição já é salva imediatamente no localStorage. */
   window.addEventListener('beforeunload', function(ev){
     if(!nPend() || !CAN_EDIT || EDIT_BLOCKED) return;
     ev.preventDefault();
@@ -1943,8 +1349,8 @@
      reunião de status, que é exatamente o momento em que a página está em modo
      apresentação e o modal de edição não abre. Mesmo motivo do crVerComentario.
 
-     Aplicar aqui NÃO grava no servidor — como todo o resto da página desde
-     ago/2026, só o botão Salvar faz isso. */
+     Aplicar aqui atualiza o cronograma e salva no localStorage, como o restante
+     da página. */
   var FCA_LABELS = ['Fato','Causa','Ação'];
   var FCA_PERIODO_FIELDS = [
     {key:'fato',  label:'Fato — o que aconteceu neste período', type:'textarea', full:true},
@@ -1955,22 +1361,18 @@
     var m = MARCA_OPTS.filter(function(o){ return o.v === v; })[0];
     return m ? m.l : '';
   }
-  /* ISO com fuso (o que o servidor grava: `timezone.now().isoformat()`) →
-     "05/08/2026 às 14:32" no fuso de quem lê. Reusa o fmtDataHora do aviso de
-     rascunho pra a página ter UM formato de data-hora. */
+  /* ISO persistido no JSON -> "05/08/2026 às 14:32" no fuso de quem lê. */
   function fmtIsoDataHora(iso){
     if(!iso) return '';
     var d = new Date(String(iso));
     return isNaN(d.getTime()) ? '' : fmtDataHora(d.getTime());
   }
-  /* Rodapé de autoria. "Ainda não gravado" não é enfeite: entre o Aplicar e o
-     Salvar o texto existe só neste navegador, e o carimbo é justamente o que
-     prova que ele passou pelo banco. */
+  /* Rodapé de autoria local do FCA. */
   function fcaCarimboTexto(e){
     var quem = fcaTexto(e && e.editadoPor).trim();
     var quando = fmtIsoDataHora(e && e.editadoEm);
-    if(!quem && !quando) return 'Ainda não gravado no servidor — clique em Salvar.';
-    return 'Última edição: ' + (quem || '(autor não registrado)') + (quando ? (' · ' + quando) : '');
+    if(!quem && !quando) return 'Registrado neste navegador.';
+    return 'Última edição: ' + (quem || 'Edição local') + (quando ? (' · ' + quando) : '');
   }
   /* Um renderizador só pro conteúdo, usado pelo modal de leitura E pelo painel.
      Texto passa por esc() e o `.cr-cmttext` preserva as quebras de linha
@@ -2033,7 +1435,7 @@
       acoes.push({label:'Limpar', cls:'danger', fn:function(){
         if(t.fcaPorPeriodo) delete t.fcaPorPeriodo[iso];
         closeModal(); markDirty(); render();
-        toast('FCA do período removido — clique em Salvar para gravar no servidor.');
+        toast('FCA do período removido e salvo neste navegador.');
       }});
     }
     acoes.push({label:'Aplicar', cls:'primary', fn:function(){
@@ -2043,20 +1445,17 @@
       if(!tem){
         delete t.fcaPorPeriodo[iso];      // três campos em branco = nada a registrar
       } else {
-        /* O carimbo local só sobrevive se o TEXTO não mudou. Texto novo com
-           carimbo velho afirmaria que outra pessoa escreveu o que eu acabei de
-           digitar — e o carimbo de verdade vem do servidor na gravação (ver
-           apps/cronograma/fca.py), que é quem pode dizer quem gravou. */
+        /* Mantém o carimbo quando o texto não mudou; texto novo recebe carimbo local. */
         var manter = atual && fcaConteudoIgual(atual, vals);
         t.fcaPorPeriodo[iso] = {
           fato: vals.fato, causa: vals.causa, acao: vals.acao,
-          editadoPor: manter ? atual.editadoPor : '',
-          editadoEm:  manter ? atual.editadoEm  : '',
+          editadoPor: manter ? atual.editadoPor : 'Edição local',
+          editadoEm:  manter ? atual.editadoEm  : new Date().toISOString(),
         };
       }
       closeModal(); markDirty(); render();
-      toast(tem ? 'FCA do período registrado — clique em Salvar para gravar no servidor.'
-                : (atual ? 'FCA do período removido — clique em Salvar para gravar no servidor.'
+      toast(tem ? 'FCA do período registrado e salvo neste navegador.'
+                : (atual ? 'FCA do período removido e salvo neste navegador.'
                          : 'Nada registrado — os três campos estavam em branco.'));
     }});
     openModal('FCA do período', wrap, acoes);
@@ -2222,6 +1621,20 @@
                'cronograma-' + slugArquivo(p.nome) + '.json');
   };
 
+  window.crExportarTudo = function(){
+    baixarJSON(normalizeData(DATA || emptyData()), 'cronogramas-projetos.json');
+  };
+
+  window.crExportarExemplo = function(){
+    fetch(DEMO_URL, { cache:'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+      .then(function(d){ baixarJSON(normalizeData(d), 'cronogramas-projetos-exemplo.json'); })
+      .catch(function(e){
+        console.warn('[cronograma] falha ao baixar exemplo', e);
+        toast('Não foi possível baixar o JSON de exemplo.', true);
+      });
+  };
+
   window.crImportarArquivo = function(file){
     if(!file || !isEditable()) return;
     var reader = new FileReader();
@@ -2229,22 +1642,41 @@
       var parsed;
       try{ parsed = JSON.parse(reader.result); }catch(e){ toast('JSON inválido.', true); return; }
       if(!parsed || typeof parsed!=='object' || parsed.version !== 1 || !Array.isArray(parsed.projetos)){
-        toast('Formato inesperado — esperado {version:1, scope:"projeto", projetos:[…]}.', true); return;
+        toast('Formato inesperado — esperado {version:1, projetos:[...]}.', true); return;
       }
-      /* Arquivo de página inteira é RECUSADO (ago/2026), não convertido: quem
-         gerou aquele arquivo tinha em mente "restaurar a página", e aceitá-lo
-         calado como se fosse de um projeto entregaria outra coisa. Recusar com
-         o motivo escrito é o que ensina o caminho novo. */
-      if(parsed.scope !== 'projeto'){
-        toast('Este é um backup da página inteira (formato antigo) e não pode mais ser importado — ele removeria projetos que não estão nele. Use "Exportar projeto" para gerar um arquivo de um projeto só.', true);
+      if(parsed.scope === 'projeto'){
+        if(!parsed.projetos.length){ toast('O arquivo não tem nenhum projeto.', true); return; }
+        if(parsed.projetos.length > 1){ toast('O arquivo tem '+parsed.projetos.length+' projetos — importe um por vez.', true); return; }
+        abrirModalImportJSON(planejarImportJSON(parsed));
         return;
       }
-      if(!parsed.projetos.length){ toast('O arquivo não tem nenhum projeto.', true); return; }
-      if(parsed.projetos.length > 1){ toast('O arquivo tem '+parsed.projetos.length+' projetos — importe um por vez.', true); return; }
-      abrirModalImportJSON(planejarImportJSON(parsed));
+      abrirModalImportTudo(parsed);
     };
     reader.readAsText(file);
   };
+
+  function abrirModalImportTudo(parsed){
+    var novo = normalizeData(parsed);
+    var nTarefas = novo.projetos.reduce(function(s,p){
+      return s + (p.etapas||[]).reduce(function(ss,e){ return ss + ((e.tarefas||[]).length); }, 0);
+    }, 0);
+    var body = document.createElement('div');
+    body.innerHTML =
+      '<div class="cr-impmeta">Este JSON tem <b>'+novo.projetos.length+'</b> projeto(s) e <b>'+nTarefas+'</b> tarefa(s).</div>' +
+      '<div class="cr-alert warn"><span class="material-symbols-outlined">warning</span>' +
+      '<div>Importar este arquivo substitui os cronogramas salvos neste navegador. Nada sai deste navegador.</div></div>';
+    openModal('Importar cronogramas', body, [
+      {label:'Cancelar', cls:'ghost', fn:closeModal},
+      {label:'Substituir dados locais', cls:'primary', fn:function(){
+        DATA = novo;
+        ensureCurrentProject();
+        closeModal();
+        saveLocal();
+        render();
+        toast('Cronogramas importados e salvos neste navegador.');
+      }},
+    ]);
+  }
 
   /* Decide o que o projeto do arquivo vai fazer com a tela ANTES de gravar
      qualquer coisa — o modal mostra o plano e o usuário confirma. É sempre
@@ -2273,7 +1705,7 @@
     var body = document.createElement('div');
     var html = '<div class="cr-impmeta" style="margin-bottom:10px">' +
       '<b>Arquivo de um projeto.</b> Só o que está abaixo é alterado — os outros projetos da página não são tocados. ' +
-      'Nada é gravado no servidor até você clicar em <b>Salvar</b>.</div>';
+      'A importação será salva apenas neste navegador.</div>';
     plano.itens.forEach(function(it, i){
       var p = it.projeto;
       var nTarefas = (p.etapas||[]).reduce(function(s,e){ return s + ((e.tarefas||[]).length); }, 0);
@@ -2336,7 +1768,7 @@
     ensureCurrentProject();
     closeModal();
     markDirty(); render();
-    toast('Projeto importado — clique em Salvar para gravar no servidor.');
+    toast('Projeto importado e salvo neste navegador.');
   }
 
   /* ---------- IMPORT DE PLANILHA EAP (.xlsx) ----------
@@ -2769,49 +2201,24 @@
     closeModal();
     markDirty(); render();
     toast((results.length===1 ? 'Cronograma importado' : results.length+' cronogramas importados') +
-      ' — clique em Salvar para gravar no servidor.');
+      ' e salvo(s) neste navegador.');
   }
 
   window.crCarregarExemplo = function(){
     if(!isEditable()) return;
-    var hoje = new Date();
-    function add(days){ var d=new Date(hoje); d.setDate(d.getDate()+days); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-    /* A 3ª tarefa demonstra o FCA por período: ela está reprogramada e o motivo
-       fica ancorado no MÊS em que a reprogramação foi declarada — não na tarefa.
-       `mesDe` traduz a data pra mesma chave canônica que a célula da linha R usa,
-       em vez de um ISO escrito à mão que só casaria por sorte. */
-    function mesDe(iso){ return periodoISO(bucketKey(parseISO(iso), 'meses'), 'meses'); }
-    var fimPiloto = add(-3);
-    var mesPiloto = mesDe(fimPiloto);
-    var marcasPiloto = {}, fcaPiloto = {};
-    marcasPiloto[mesPiloto] = 'reprogramada';
-    fcaPiloto[mesPiloto] = {
-      fato: 'Piloto não iniciado no prazo',
-      causa: 'Dependência de dados externos',
-      acao: 'Antecipar carga de dados',
-    };
-    var exemplo = {
-      id:uid(), nome:'Exemplo — Consolidação Carteira (demo)', lider:'—', unidade:'meses',
-      dataRevisao: add(15), inicio:'', fim:'',
-      etapas: [
-        { id:uid(), titulo:'Definir premissas e arquitetura', tarefas:[
-          { id:uid(), titulo:'Levantar requisitos', responsavel:'Equipe', inicio:add(-60), fim:add(-20), status:'concluida', dataConclusaoReal:add(-22), novoPrazo:'', comentarios:'' },
-          { id:uid(), titulo:'Corrigir arquitetura de dados', responsavel:'Equipe', inicio:add(-20), fim:add(10), status:'em_andamento', dataConclusaoReal:'', novoPrazo:'', comentarios:'' },
-        ]},
-        { id:uid(), titulo:'Homologar com usuários-piloto', tarefas:[
-          { id:uid(), titulo:'Rodar piloto com 2 acionistas', responsavel:'Equipe', inicio:add(-30), fim:fimPiloto, status:'nao_iniciada', dataConclusaoReal:'', novoPrazo:add(25), realizado:marcasPiloto, fcaPorPeriodo:fcaPiloto, comentarios:'Aguardando confirmação dos dois acionistas para agendar a sessão.' },
-        ]},
-      ],
-    };
-    /* Normaliza antes de entrar no DATA: o exemplo agora traz marca de período, e
-       é o normalizeProjeto que mantém a invariante "status = última marca". Com o
-       literal cru, a 3ª tarefa entraria com status 'nao_iniciada' ao lado de uma
-       marca que diz o contrário — a tela mostraria uma coisa e o KPI outra, até
-       alguém recarregar a página. */
-    DATA.projetos.push(normalizeProjeto(exemplo)); CUR_PROJ_ID = DATA.projetos[DATA.projetos.length-1].id;
-    markDirty();
-    toast('Exemplo carregado — clique em Salvar se quiser gravá-lo no servidor.');
-    render();
+    fetch(DEMO_URL, { cache:'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+      .then(function(d){
+        DATA = normalizeData(d);
+        ensureCurrentProject();
+        saveLocal();
+        render();
+        toast('Exemplo carregado e salvo neste navegador.');
+      })
+      .catch(function(e){
+        console.warn('[cronograma] falha ao carregar exemplo', e);
+        toast('Não foi possível carregar o exemplo.', true);
+      });
   };
 
   /* ---------- RENDER ---------- */
@@ -2854,10 +2261,15 @@
         '<div class="cr-emptyactions">' +
           '<button class="cr-btn primary" onclick="crNovoProjeto()"><span class="material-symbols-outlined">add</span>Novo projeto</button>' +
           '<label class="cr-btn ghost cr-filelabel">' +
+            '<span class="material-symbols-outlined">upload</span>Importar JSON' +
+            '<input type="file" accept=".json,application/json" onchange="crImportarArquivo(this.files[0]); this.value=\'\';">' +
+          '</label>' +
+          '<label class="cr-btn ghost cr-filelabel">' +
             '<span class="material-symbols-outlined">table_view</span>Importar planilha (Excel)' +
             '<input type="file" accept=".xlsx,.xlsm" onchange="crImportarXLSX(this.files[0]); this.value=\'\';">' +
           '</label>' +
-          '<button class="cr-btn ghost" onclick="crCarregarExemplo()"><span class="material-symbols-outlined">science</span>Carregar exemplo</button>' +
+          '<button class="cr-btn ghost" onclick="crCarregarExemplo()"><span class="material-symbols-outlined">science</span>Carregar demo</button>' +
+          '<button class="cr-btn ghost" onclick="crExportarExemplo()"><span class="material-symbols-outlined">download</span>Baixar JSON demo</button>' +
         '</div>'
         : '<p>Peça a um admin/editor para criar um projeto.</p>') +
       '</div>';
@@ -2897,9 +2309,11 @@
     if(!isEditable()) return '';
     return '<div class="cr-actionsbar">' +
         '<button class="cr-btn primary sm" onclick="crNovaEtapa(\''+p.id+'\')"><span class="material-symbols-outlined">add</span>Etapa</button>' +
+        '<button class="cr-btn ghost sm" onclick="crExportarTudo()"><span class="material-symbols-outlined">download</span>Exportar tudo</button>' +
         '<button class="cr-btn ghost sm" onclick="crExportarProjeto()"><span class="material-symbols-outlined">download</span>Exportar projeto</button>' +
+        '<button class="cr-btn ghost sm" onclick="crExportarExemplo()"><span class="material-symbols-outlined">science</span>Baixar JSON demo</button>' +
         '<label class="cr-btn ghost sm cr-filelabel">' +
-          '<span class="material-symbols-outlined">upload</span>Importar projeto (JSON)' +
+          '<span class="material-symbols-outlined">upload</span>Importar JSON' +
           '<input type="file" accept=".json,application/json" onchange="crImportarArquivo(this.files[0]); this.value=\'\';">' +
         '</label>' +
         '<label class="cr-btn ghost sm cr-filelabel">' +
@@ -3582,49 +2996,24 @@
     COLW           = lsGetJSON(COLW_KEY, {});
   }
 
-  /* `recarga` = true quando o usuário pediu pra descartar as alterações dele e
-     voltar ao que está no servidor (ver resolverConflitos). Aí as preferências
-     de leitura não são relidas (já estão em memória) e o aviso de rascunho
-     pendente NÃO aparece — ele acabou de dizer que quer o servidor, perguntar de
-     novo seria ignorar a resposta. */
   function init(recarga){
     if(!recarga) loadPrefs();
-    fetchRole().then(function(role){
-      ROLE = role;
-      return loadData().then(function(){
-        /* SRV_EDITAVEL é a palavra do servidor (permissão da Page); o papel do
-           /nav é só o que o front conseguiu inferir. Quando os dois discordam,
-           vale o servidor — é ele que vai recusar a escrita. */
-        CAN_EDIT = canManage(ROLE) && !EDIT_BLOCKED && SRV_EDITAVEL !== false;
-        render();
-        /* Depois do render: a página já está usável enquanto o aviso está na
-           tela, e o modal fala sobre o que a pessoa está vendo.
-
-           O saveDraftLocal() quando NÃO há nada a restaurar é load-bearing: sem
-           ele o rascunho antigo continuaria marcado como pendente, e a próxima
-           abertura ofereceria restaurar justamente o trabalho que a pessoa acabou
-           de descartar. Só roda depois de offerDraftRestore ter lido o rascunho —
-           inverter a ordem apagaria o que ele existe pra proteger. */
-        if(recarga){
-          saveDraftLocal();
-          toast('Recarregado do servidor.');
-        } else if(!offerDraftRestore()){
-          saveDraftLocal();
-        }
-      });
+    CAN_EDIT = true;
+    return loadData().then(function(){
+      render();
     });
   }
   /* ---------- HOOK DE TESTE ----------
      Handle de leitura pras funções PURAS de domínio, pro harness em
      `tests/js/cronograma.test.js` exercitá-las sem navegador (ver
      `tests/js/README.md`). Todas são funções que só LEEM o projeto que recebem:
-     nenhuma escreve em DATA, no servidor ou no localStorage, então expor não
+     nenhuma escreve em DATA ou no localStorage, então expor não
      abre caminho de escrita nenhum.
 
      Existe porque a regra de atraso mora aqui, no front, e é justamente a que
      errava calado até ago/2026: tarefa com prazo vencido contava como em dia se
      alguém tivesse marcado "Em dia" num período anterior. Erro de leitura de
-     cronograma não estoura exceção nem aparece no log do servidor — só produz um
+     cronograma não estoura exceção; só produz um
      número errado na tela, que alguém acredita. Teste é a única rede aqui. */
   window.__crTest = {
     computeProjectView: computeProjectView,
@@ -3638,11 +3027,7 @@
     bucketLabel: bucketLabel,
     periodoISO: periodoISO,
     periodoLabel: periodoLabel,
-    /* FCA por período. `projKey` entra por causa do carimbo de autoria: ele é
-       escrito pelo SERVIDOR durante a gravação, e se entrasse na chave o projeto
-       voltaria do banco "diferente" do que o navegador mandou — não salvo logo
-       depois de salvo, e falso conflito no save seguinte. É invisível na tela e
-       só teste pega. */
+    /* FCA por período. `projKey` ignora o carimbo local para que autoria/data não contem como mudança de conteúdo do plano. */
     fcaPendencias: fcaPendencias,
     fcaRegistros: fcaRegistros,
     projKey: projKey,

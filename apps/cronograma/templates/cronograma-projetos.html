@@ -6,13 +6,14 @@
 
 {% block page_title %}Cronograma de Projetos{% endblock %}
 
-{% block nav_inicio %}active{% endblock %}
+{% block nav_projetos %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/cronograma-projetos.css' %}">
+{% endblock %}
 
 {% block content %}
 
-<link rel="stylesheet" href="{% static 'css/cronograma-projetos.css' %}">
-
-<!-- ══ CONTEÚDO ══ -->
 <div class="dashboard-area" id="dashboardArea">
   <div id="cr-root">
     <div class="cr-toolbar">
@@ -35,12 +36,9 @@
               title="Volta todas as colunas à largura padrão">
         <span class="material-symbols-outlined">swap_horiz</span>Redefinir larguras
       </button>
-      <!-- gravar no servidor é explícito desde ago/2026: editar só mexe no que
-           está na tela (+ rascunho local) e este botão é o único caminho até o
-           banco. Ver markDirty()/crSalvarAgora() no script. -->
       <button class="cr-btn save sm" id="cr-btnsave" onclick="crSalvarAgora()" style="display:none" disabled
-              title="Grava no servidor as alterações desta sessão (Ctrl+S)">
-        <span class="material-symbols-outlined">save</span>Salvar
+              title="Grava no localStorage deste navegador (Ctrl+S)">
+        <span class="material-symbols-outlined">save</span>Salvar local
       </button>
       <span id="cr-saveind" class="cr-saveind">Carregando…</span>
       <!-- laranja: leva a OUTRA visão, não é ação nesta. Ver .cr-btn.accent.
@@ -66,4 +64,7 @@
 
 {% endblock %}
 
+{% block extra_js %}
+<script src="{% static 'js/material-symbols-fallback.js' %}"></script>
 <script src="{% static 'js/cronograma-projetos.js' %}"></script>
+{% endblock %}
