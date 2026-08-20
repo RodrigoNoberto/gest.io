@@ -129,7 +129,7 @@ body {
   background: none;
   width: 100%;
   text-align: left;
-  transition: background .15s, color .15s;
+  transition: background .15s, color .15s, gap .25s ease;
 }
 .nav-item svg { width: 20px; min-width: 20px; height: 20px; }
 .nav-item:hover { background: var(--sidebar-bg-hover); color: #fff; }
@@ -182,7 +182,6 @@ body {
 .sidebar.collapsed .nav-sub { display: none !important; }
 .sidebar.collapsed .nav-group .nav-sub { padding-left: 0; }
 .sidebar.collapsed .brand { justify-content: center; padding-left: 0; }
-.sidebar.collapsed .sidebar-top { padding: 18px 14px 8px; align-items: center; }
 
 /* ---------- MAIN ---------- */
 .main {
@@ -879,6 +878,17 @@ body {
   border-radius: 20px;
   padding: 3px 12px;
   font-size: 12px;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-logo {
+  height: 25px;
+  display: block;
 }
 
 /* ---------- CONTACTS PAGE ---------- */
