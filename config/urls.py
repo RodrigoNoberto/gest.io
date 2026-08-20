@@ -16,11 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from apps.core.views import home
+from apps.core.views import home, produtos, sobre
 from apps.cronograma.views import cronograma
+from apps.temporizador.views import temporizador
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home, name='home'),
+    path('produtos/', produtos, name='produtos'),
     path('cronograma/', cronograma, name='cronograma'),
+    path('temporizador/', temporizador, name='temporizador'),
+    path('sobre/', sobre, name='sobre'),
 ]

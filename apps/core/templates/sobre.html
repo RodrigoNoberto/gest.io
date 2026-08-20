@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Sobre{% endblock %}
+
+{% block page_title %}Sobre{% endblock %}
+
+{% block nav_sobre %}active{% endblock %}
+
+{% block content %}
+<section class="about-page">
+  <section class="about-profile about-profile--story">
+    <div class="about-profile__photo">
+      <img src="{% static 'img/rodrigo_profile_pic.jpg' %}" alt="Foto de Rodrigo César">
+    </div>
+
+    <div class="about-profile__body">
+      <p class="about-profile__eyebrow">Sobre Mim</p>
+      <h2>Gest.io nasce da prática: transformar rotina operacional em sistemas simples, úteis e bem conectados.</h2>
+      <p class="about-profile__summary">
+        Sou Rodrigo César, natural de Recife-PE, graduado em Engenharia de Produção pela UFPE. 
+        Atuo desde 2023 no mercado financeiro em funções de apoio a operações e em desenvolvimento de soluções — 
+        seja de dados ou software. 
+      </p>
+      <br>
+      <p class="about-profile__summary">
+        Criei este portal para reunir ferramentas
+        que desenvolvi e que ajudam a planejar projetos, organizar apresentações, automatizar processos e dar mais clareza
+        para decisões do dia a dia. A proposta é combinar visão de negócio, dados e tecnologia em produtos leves,
+        objetivos e próximos de quem realmente usa.
+      </p>
+
+      <div class="about-contact">
+        <a href="mailto:rodrigocsnf@gmail.com">
+          <span>E-mail</span>
+          rodrigocsnf@gmail.com
+        </a>
+        <a href="https://linkedin.com/in/ferreirarodrigocesar/" target="_blank" rel="noopener noreferrer">
+          <span>LinkedIn</span>
+          linkedin.com/in/ferreirarodrigocesar
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="about-story-grid">
+    <article class="about-panel about-panel--text">
+      <div class="about-panel__header">
+        <h3>Trajetória</h3>
+      </div>
+      <p>
+        Minha trajetória começa em uma gestora de recursos de terceiros, no mercado financeiro, 
+        onde inicialmente atuei na área de riscos e compliance. Ainda como estagiário, desenvolvia soluções
+        para automações de processos, com Python, VBA e Microsoft Power Automate, que economizavam várias horas de trabalho
+        todos os meses.
+      </p>
+      <p>
+        Hoje, como engenheiro de dados, trabalho com a construção de pipelines de dados,
+        integração com plataformas de terceiros, automação e gestão de processos, e desenvolvimento de aplicações web. O foco
+        está na otimização de processos, redução de gargalos e disponibilização de dados precisos para auxiliar a tomada de decisão.
+      </p>
+    </article>
+
+    <article class="about-panel about-panel--text">
+      <div class="about-panel__header">
+        <h3>Educação</h3>
+      </div>
+      <p>
+        Minha base acadêmica vem da Engenharia de Produção pela Universidade Federal de Pernambuco, com passagem pela
+        École Polytechnique de Montréal. A partir de 2026, sigo aprofundando a formação em Ciência da Computação no
+        mestrado da UFPE.
+      </p>
+      <div class="about-mini-list">
+        <span>Engenharia de Produção, UFPE</span>
+        <span>Ciência da Computação, UFPE</span>
+      </div>
+    </article>
+  </section>
+
+  <section class="about-products">
+    <div class="about-section-heading">
+      <span class="products-eyebrow">Produtos e projetos</span>
+      <h3>Ferramentas construídas para resolver problemas reais</h3>
+    </div>
+
+    <div class="about-card-grid">
+      <a class="product-card product-card--active" href="/cronograma/">
+        <div class="product-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M3 3v18h18" />
+            <rect x="7" y="11" width="3" height="6" />
+            <rect x="12" y="7" width="3" height="10" />
+            <rect x="17" y="13" width="3" height="4" />
+          </svg>
+        </div>
+        <div class="product-card__body">
+          <span class="product-card__status">Produto</span>
+          <h3>Gram.io</h3>
+          <p>Planejamento visual de projetos, etapas, prazos, ocupação da equipe e leitura rápida de gargalos.</p>
+        </div>
+        <span class="product-card__action">Abrir</span>
+      </a>
+
+      <a class="product-card product-card--active" href="/temporizador/">
+        <div class="product-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="13" r="8" />
+            <path d="M12 9v4l3 2" />
+            <path d="M9 2h6" />
+          </svg>
+        </div>
+        <div class="product-card__body">
+          <span class="product-card__status">Produto</span>
+          <h3>Temp.io</h3>
+          <p>Temporizador para apresentações, com parametrização de tempos por slides ou por seções e visual personalizável.</p>
+        </div>
+        <span class="product-card__action">Abrir</span>
+      </a>
+
+      <article class="product-card product-card--disabled">
+        <div class="product-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M4 19.5V5a2 2 0 0 1 2-2h11" />
+            <path d="M8 7h8" />
+            <path d="M8 11h8" />
+            <path d="M8 15h5" />
+            <path d="M20 7v12a2 2 0 0 1-2 2H6" />
+          </svg>
+        </div>
+        <div class="product-card__body">
+          <span class="product-card__status">Projeto</span>
+          <h3>Portal de BackOffice</h3>
+          <p>Ambiente para centralizar rotinas, relatórios e sistemas internos de apoio à operações de backoffice financeiro.</p>
+        </div>
+      </article>
+
+      <article class="product-card product-card--disabled">
+        <div class="product-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M3 17l6-6 4 4 8-8" />
+            <path d="M14 7h7v7" />
+            <path d="M5 21h14" />
+          </svg>
+        </div>
+        <div class="product-card__body">
+          <span class="product-card__status">Iniciação Científica</span>
+          <h3>Algoritmos de Sequenciamento da Produção</h3>
+          <p>Implementação, em Python, de algoritmos para Sequenciamento da Produção, com foco em heurísticas aplicadas a problemas de Programação Linear Inteira Mista (MILP).</p>
+        </div>
+      </article>
+    </div>
+  </section>
+</section>
+{% endblock %}

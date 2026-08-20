@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Temporizador{% endblock %}
+
+{% block page_title %}Temporizador{% endblock %}
+
+{% block nav_produtos %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/temporizador.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="tm-root" id="tmRoot">
+  <section class="tm-setup" id="tmSetup">
+    <div class="tm-head">
+      <div>
+        <span class="tm-eyebrow">Apresentações</span>
+        <h2>Temporizador de slides e seções</h2>
+        <p>Monte a sequência, escolha como distribuir o tempo e acompanhe a apresentação em tela cheia.</p>
+      </div>
+      <button class="tm-btn tm-btn--ghost" type="button" id="tmLoadDemo">
+        <span class="material-symbols-outlined">auto_awesome</span>
+        Exemplo
+      </button>
+    </div>
+
+    <div class="tm-panel">
+      <div class="tm-choice" role="radiogroup" aria-label="Tipo de temporizador">
+        <label class="tm-choice__item">
+          <input type="radio" name="tmMode" value="slides" checked>
+          <span>
+            <strong>Sequência de slides</strong>
+            <small>Use quando a apresentação não precisa ser agrupada por seções.</small>
+          </span>
+        </label>
+        <label class="tm-choice__item">
+          <input type="radio" name="tmMode" value="sections">
+          <span>
+            <strong>Sequência de seções</strong>
+            <small>Organize blocos com quantidades diferentes de slides.</small>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <form class="tm-grid" id="tmForm">
+      <section class="tm-panel" id="tmSlidesPanel">
+        <div class="tm-panel__top">
+          <div>
+            <h3>Slides</h3>
+            <p>Defina a quantidade e a regra de tempo.</p>
+          </div>
+        </div>
+
+        <div class="tm-fields">
+          <label class="tm-field">
+            <span>Quantidade de slides</span>
+            <input type="number" id="tmSlideCount" min="1" max="200" value="10">
+          </label>
+
+          <label class="tm-field">
+            <span>Distribuição</span>
+            <select id="tmSlideStrategy">
+              <option value="per-slide">Tempo por slide</option>
+              <option value="total">Tempo total dividido igualmente</option>
+            </select>
+          </label>
+
+          <label class="tm-field" id="tmSlideTotalField">
+            <span>Tempo total</span>
+            <input type="text" id="tmSlideTotal" value="20:00" placeholder="mm:ss ou minutos">
+          </label>
+
+          <label class="tm-field" id="tmSlideDefaultField">
+            <span>Tempo padrão por slide</span>
+            <input type="text" id="tmSlideDefault" value="02:00" placeholder="mm:ss ou minutos">
+          </label>
+        </div>
+
+        <details class="tm-disclosure" open>
+          <summary>
+            <span class="material-symbols-outlined">expand_more</span>
+            Sequência de slides
+          </summary>
+          <div class="tm-list" id="tmSlideTimes"></div>
+        </details>
+      </section>
+
+      <section class="tm-panel tm-hidden" id="tmSectionsPanel">
+        <div class="tm-panel__top">
+          <div>
+            <h3>Seções</h3>
+            <p>Cadastre as seções, a quantidade de slides e a regra de divisão.</p>
+          </div>
+          <button class="tm-iconbtn" type="button" id="tmAddSection" title="Adicionar seção">
+            <span class="material-symbols-outlined">add</span>
+          </button>
+        </div>
+
+        <div class="tm-fields">
+          <label class="tm-field">
+            <span>Distribuição</span>
+            <select id="tmSectionStrategy">
+              <option value="per-slide">Tempo por slide de cada seção</option>
+              <option value="per-section">Tempo por seção dividido entre os slides</option>
+              <option value="total">Tempo total dividido por seções e slides</option>
+            </select>
+          </label>
+
+          <label class="tm-field" id="tmSectionTotalField">
+            <span>Tempo total</span>
+            <input type="text" id="tmSectionTotal" value="30:00" placeholder="mm:ss ou minutos">
+          </label>
+
+          <label class="tm-field" id="tmSectionDefaultField">
+            <span>Tempo padrão</span>
+            <input type="text" id="tmSectionDefault" value="05:00" placeholder="mm:ss ou minutos">
+          </label>
+        </div>
+
+        <details class="tm-disclosure" open>
+          <summary>
+            <span class="material-symbols-outlined">expand_more</span>
+            Sequência de seções e slides
+          </summary>
+          <div class="tm-section-list" id="tmSections"></div>
+        </details>
+      </section>
+
+      <aside class="tm-panel tm-summary">
+        <div class="tm-panel__top">
+          <div>
+            <h3>Resumo</h3>
+            <p id="tmSummaryText">10 slides, 20:00 no total.</p>
+          </div>
+        </div>
+
+        <div class="tm-kpis">
+          <div>
+            <span>Total</span>
+            <strong id="tmTotalPreview">20:00</strong>
+          </div>
+          <div>
+            <span>Itens</span>
+            <strong id="tmItemPreview">10</strong>
+          </div>
+        </div>
+
+        <details class="tm-disclosure tm-disclosure--compact" open>
+          <summary>
+            <span class="material-symbols-outlined">expand_more</span>
+            Sequência calculada
+          </summary>
+          <div class="tm-preview" id="tmPreview"></div>
+        </details>
+
+        <div class="tm-actions">
+          <button class="tm-btn tm-btn--primary" type="submit">
+            <span class="material-symbols-outlined">play_arrow</span>
+            Preparar temporizador
+          </button>
+          <button class="tm-btn tm-btn--ghost" type="button" id="tmResetSetup">
+            <span class="material-symbols-outlined">restart_alt</span>
+            Limpar
+          </button>
+        </div>
+      </aside>
+    </form>
+  </section>
+
+  <section class="tm-runner tm-hidden" id="tmRunner" aria-live="polite">
+    <div class="tm-runner__top">
+      <div class="tm-runner__left">
+        <div class="tm-runner__meta">
+          <span id="tmClock">--:--</span>
+        </div>
+      </div>
+
+      <div class="tm-runner__meta tm-runner__meta--runtime">
+        <span id="tmElapsed">00:00:00</span>
+      </div>
+    </div>
+
+    <div class="tm-stage">
+      <span class="tm-stage__label" id="tmStageLabel">Slide 1 / 1</span>
+      <h2 id="tmStageTitle">Slide 1</h2>
+      <div class="tm-time" id="tmTime">00:00</div>
+      <div class="tm-progress"><span id="tmProgress"></span></div>
+    </div>
+
+    <div class="tm-runner__controls">
+      <button class="tm-btn tm-btn--ghost tm-runner__config" type="button" id="tmBackSetup">
+        <span class="material-symbols-outlined">tune</span>
+        Configurar
+      </button>
+      <button class="tm-iconbtn tm-iconbtn--large" type="button" id="tmPrev" title="Anterior">
+        <span class="material-symbols-outlined">skip_previous</span>
+      </button>
+      <button class="tm-iconbtn tm-iconbtn--large tm-iconbtn--primary" type="button" id="tmStartPause" title="Iniciar">
+        <span class="material-symbols-outlined">play_arrow</span>
+      </button>
+      <button class="tm-iconbtn tm-iconbtn--large" type="button" id="tmNext" title="Próximo">
+        <span class="material-symbols-outlined">skip_next</span>
+      </button>
+      <button class="tm-iconbtn tm-iconbtn--large" type="button" id="tmRestart" title="Reiniciar item">
+        <span class="material-symbols-outlined">replay</span>
+      </button>
+      <details class="tm-runner__size-menu">
+        <summary class="tm-iconbtn tm-iconbtn--large" title="Ajustar tamanho" aria-label="Ajustar tamanho">
+          <span class="material-symbols-outlined">text_fields</span>
+        </summary>
+        <div class="tm-runner__size" aria-label="Ajustes de tamanho">
+          <label>
+            <span>Cards</span>
+            <input type="range" id="tmMetaScale" min="100" max="250" step="5" value="100">
+          </label>
+          <label>
+            <span>Texto</span>
+            <input type="range" id="tmTextScale" min="100" max="160" step="5" value="100">
+          </label>
+          <label>
+            <span>Timer</span>
+            <input type="range" id="tmTimerScale" min="100" max="150" step="5" value="100">
+          </label>
+        </div>
+      </details>
+      <button class="tm-iconbtn tm-iconbtn--large" type="button" id="tmFullscreen" title="Tela cheia">
+        <span class="material-symbols-outlined">fullscreen</span>
+      </button>
+    </div>
+
+    <details class="tm-disclosure tm-runner__sequence" open>
+      <summary>
+        <span class="material-symbols-outlined">expand_more</span>
+        Sequência de slides
+      </summary>
+      <div class="tm-agenda" id="tmAgenda"></div>
+    </details>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/material-symbols-fallback.js' %}"></script>
+<script src="{% static 'js/temporizador.js' %}"></script>
+{% endblock %}

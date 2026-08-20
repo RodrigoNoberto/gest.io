@@ -2,8 +2,17 @@ const sidebar = document.getElementById('sidebar');
 const toggleBtn = document.getElementById('toggleBtn');
 
 if (sidebar && toggleBtn) {
+  const updateSidebarToggleLabel = () => {
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    toggleBtn.setAttribute('aria-label', isCollapsed ? 'Expandir menu' : 'Recolher menu');
+    toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+  };
+
+  updateSidebarToggleLabel();
+
   toggleBtn.addEventListener('click', () => {
     sidebar.classList.toggle('collapsed');
+    updateSidebarToggleLabel();
   });
 }
 
@@ -14,6 +23,8 @@ if (sidebar && grpProjetos && grpProjetosToggle) {
   grpProjetosToggle.addEventListener('click', () => {
     if (sidebar.classList.contains('collapsed')) {
       sidebar.classList.remove('collapsed');
+      toggleBtn.setAttribute('aria-label', 'Recolher menu');
+      toggleBtn.setAttribute('aria-expanded', 'true');
     }
     grpProjetos.classList.toggle('open');
   });

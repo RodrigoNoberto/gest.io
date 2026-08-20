@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos{% endblock %}
+
+{% block page_title %}Produtos{% endblock %}
+
+{% block nav_produtos %}active{% endblock %}
+
+{% block content %}
+
+<section class="products-page">
+  <div class="products-intro">
+    <div>
+      <span class="products-eyebrow">Portal de apps</span>
+      <h2>Produtos</h2>
+      <p>Escolha uma ferramenta para seguir.</div>
+  </div>
+
+  <div class="products-grid">
+    <a class="product-card product-card--active" href="/cronograma/">
+      <div class="product-card__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v18h18" />
+          <rect x="7" y="11" width="3" height="6" />
+          <rect x="12" y="7" width="3" height="10" />
+          <rect x="17" y="13" width="3" height="4" />
+        </svg>
+      </div>
+      <div class="product-card__body">
+        <span class="product-card__status">Disponível no portal</span>
+        <h3>Gram.io</h3>
+        <p>Planejamento visual de projetos, etapas, ocupação da equipe e exportação/importação de cronogramas em JSON.</p>
+      </div>
+      <span class="product-card__action">Abrir</span>
+    </a>
+
+    <a class="product-card product-card--active" href="/temporizador/">
+      <div class="product-card__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="13" r="8" />
+          <path d="M12 9v4l3 2" />
+          <path d="M9 2h6" />
+        </svg>
+      </div>
+      <div class="product-card__body">
+        <span class="product-card__status">Disponível no portal</span>
+        <h3>Temp.io</h3>
+        <p>Configure tempos por slide, por seção ou pelo total da apresentação, com execução em tela cheia e dados salvos no navegador.</p>
+      </div>
+      <span class="product-card__action">Abrir</span>
+    </a>
+  </div>
+</section>
+
+{% endblock %}

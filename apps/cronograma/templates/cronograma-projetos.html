@@ -6,7 +6,7 @@
 
 {% block page_title %}Cronograma de Projetos{% endblock %}
 
-{% block nav_projetos %}active{% endblock %}
+{% block nav_produtos %}active{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cronograma-projetos.css' %}">
@@ -40,7 +40,6 @@
               title="Grava no localStorage deste navegador (Ctrl+S)">
         <span class="material-symbols-outlined">save</span>Salvar local
       </button>
-      <span id="cr-saveind" class="cr-saveind">Carregando…</span>
       <!-- laranja: leva a OUTRA visão, não é ação nesta. Ver .cr-btn.accent.
            É o ÚLTIMO do DOM de propósito: o CSS o empurra pro canto direito
            (#cr-btnview{margin-left:auto}), então tudo que vier depois dele no

@@ -11,6 +11,7 @@
     fact_check: '<path d="M4 5h16v14H4z"/><path d="M8 9h5M8 13h5M8 17h3M15 16l2 2 4-5"/>',
     upload: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
     table_view: '<path d="M4 5h16v14H4zM4 10h16M10 5v14"/>',
+    text_fields: '<path d="M4 6V4h16v2M12 4v16M9 20h6"/><path d="M4 11h6M7 11v9M5 20h4"/>',
     science: '<path d="M9 3h6M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3"/><path d="M8 15h8"/>',
     download: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
@@ -19,7 +20,16 @@
     chevron_right: '<path d="m9 6 6 6-6 6"/>',
     expand_more: '<path d="m6 9 6 6 6-6"/>',
     filter_list: '<path d="M4 6h16M7 12h10M10 18h4"/>',
-    view_timeline: '<path d="M4 6h6v4H4zM14 6h6v4h-6zM7 14h10v4H7z"/><path d="M10 8h4M12 10v4"/>'
+    view_timeline: '<path d="M4 6h6v4H4zM14 6h6v4h-6zM7 14h10v4H7z"/><path d="M10 8h4M12 10v4"/>',
+    auto_awesome: '<path d="m12 3 1.8 4.4L18 9.2l-4.2 1.8L12 15l-1.8-4L6 9.2l4.2-1.8L12 3z"/><path d="m5 14 .9 2.1L8 17l-2.1.9L5 20l-.9-2.1L2 17l2.1-.9L5 14zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/>',
+    play_arrow: '<path d="M8 5v14l11-7z"/>',
+    pause: '<path d="M8 5h3v14H8zM13 5h3v14h-3z"/>',
+    restart_alt: '<path d="M4 6v5h5"/><path d="M5.7 15A7 7 0 1 0 7 7.8L4 11"/>',
+    tune: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10M4 12h4M12 12h8"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/><circle cx="10" cy="12" r="2"/>',
+    skip_previous: '<path d="M6 5v14"/><path d="m18 6-9 6 9 6z"/>',
+    skip_next: '<path d="M18 5v14"/><path d="m6 6 9 6-9 6z"/>',
+    replay: '<path d="M4 7v6h6"/><path d="M5.8 17A7 7 0 1 0 6 7.7L4 13"/>',
+    content_copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'
   };
 
   function iconSvg(name) {
