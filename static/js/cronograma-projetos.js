@@ -924,8 +924,17 @@
     }
   }
   function loadData() {
-    DATA = loadLocal() || emptyData();
-    return Promise.resolve();
+    var local = loadLocal();
+    if (local) { DATA = local; return Promise.resolve(); }
+    /* Primeira visita (nada no localStorage ainda): carrega o exemplo e já
+       salva, igual ao clique manual em "carregar exemplo" (crCarregarExemplo). */
+    return fetch(DEMO_URL, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function (d) { DATA = normalizeData(d); saveData(); })
+      .catch(function (e) {
+        console.warn('[cronograma] falha ao carregar exemplo inicial', e);
+        DATA = emptyData();
+      });
   }
 
   /* ---------- MODAL / FORM (adaptado do gestao-alocacao.html, só os tipos usados aqui) ---------- */
