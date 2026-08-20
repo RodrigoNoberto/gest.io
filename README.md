@@ -13,7 +13,7 @@ Além dos produtos, o portal tem páginas institucionais: **Início** (`/`), **P
 
 ## Stack
 
-- **Backend:** Django 6.1 (Python), views baseadas em função, sem uso de banco de dados além do SQLite padrão (os apps ainda não possuem models).
+- **Backend:** Django 6.1 (Python), views baseadas em função. Sem banco de dados — `admin`, `auth`, `contenttypes` e `sessions` não são usados e foram removidos de `INSTALLED_APPS`.
 - **Frontend:** HTML/CSS/JS "vanilla", sem framework de build — templates Django + arquivos estáticos servidos via `django.contrib.staticfiles`.
 - **Persistência dos produtos:** `localStorage` no navegador (Cronograma e Temporizador não gravam dados no servidor).
 
@@ -40,7 +40,6 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 
-python manage.py migrate
 python manage.py runserver
 ```
 
@@ -48,9 +47,23 @@ O portal fica disponível em `http://127.0.0.1:8000/`.
 
 ## Configuração
 
-O projeto usa configurações padrão de desenvolvimento em `config/settings.py` (`DEBUG=True`, SQLite local). Há um arquivo `.env` reservado para variáveis de ambiente (ignorado pelo Git), mas nenhuma variável é lida dele atualmente.
+`config/settings.py` lê as configurações sensíveis de variáveis de ambiente, com valores padrão seguros para desenvolvimento local:
 
-> Antes de qualquer deploy em produção, revise `SECRET_KEY`, `DEBUG` e `ALLOWED_HOSTS` em `config/settings.py` — os valores atuais são apenas para desenvolvimento local.
+| Variável | Padrão local | Produção |
+|---|---|---|
+| `SECRET_KEY` | chave de desenvolvimento embutida | defina uma chave própria e secreta |
+| `DEBUG` | `False` | mantenha `False` (ou omita a variável) |
+| `ALLOWED_HOSTS` | vazio | hosts separados por vírgula, ex. `meusite.com,www.meusite.com` |
+
+Como `DEBUG=False` por padrão, rodar `runserver` localmente exige `ALLOWED_HOSTS` com pelo menos `localhost,127.0.0.1`:
+
+```bash
+# Windows (PowerShell)
+$env:ALLOWED_HOSTS = "localhost,127.0.0.1"
+python manage.py runserver
+```
+
+Antes de servir em produção, rode `python manage.py collectstatic` — os arquivos estáticos são servidos via WhiteNoise (`STATIC_ROOT = staticfiles/`, já no `.gitignore`). O servidor de produção recomendado é o `gunicorn` (`gunicorn config.wsgi:application`), incluído no `requirements.txt`.
 
 ## Docker
 

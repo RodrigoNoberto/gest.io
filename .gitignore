@@ -6,3 +6,4 @@ static/data/*
 !static/data/cronograma-exemplo.json
 .venv
 db.sqlite3
+staticfiles/
