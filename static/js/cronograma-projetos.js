@@ -29,7 +29,22 @@
   var ALOC_DECIDED = {};         // projetoId -> true = usuário já escolheu explicitamente incluir/excluir
   var ALOC_DECIDED_KEY = 'cr:' + PAGE_SLUG + ':alocdecided';
   var ALOC_PICK_OPEN = false;    // <details> do seletor de projetos aberto (não persiste)
-  /* Este persiste, diferente do ALOC_PICK_OPEN acima: quem apresenta o
+  /* Mesma razão do ALOC_PICK_OPEN: o rail é remontado a cada render(), então o
+     aberto/fechado do menu "Dados" tem que viver fora do DOM — senão exportar
+     um projeto fecharia o menu e obrigaria a reabrir pro próximo. */
+  var RAIL_MENU_OPEN = false;
+  /* Rail recolhido = GAVETA FECHADA: uma faixa branca com o chevron e nada mais.
+     Era "só ícones", como a sidebar de navegação do site — mas ali os ícones são
+     destinos, e aqui são ferramentas de edição, que só interessam a quem foi
+     editar. Este PERSISTE: é preferência de leitura, igual às outras desta
+     página. Default resolvido no loadPrefs (fechado).
+     ⚠ A chave leva `:v2` porque a SEMÂNTICA do valor mudou: o '0' guardado sob a
+     regra antiga significava "quero os rótulos ao lado dos ícones", não "quero a
+     gaveta aberta" — herdar aquele '0' abriria o painel inteiro pra quem só
+     tinha pedido texto nos botões. Sufixo novo = todo mundo recomeça fechado. */
+  var RAIL_COLLAPSED = true;
+  var RAIL_COLLAPSED_KEY = 'cr:' + PAGE_SLUG + ':railcollapsed:v2';
+  /* Este persiste, diferente dos dois acima: quem apresenta o
      cronograma quer o painel de FCA aberto toda vez, e a página remonta o HTML a
      cada clique em célula — sem guardar, o painel fecharia sozinho no meio da
      reunião. */
@@ -856,7 +871,15 @@
       nome: p.nome || '(sem nome)',
       lider: p.lider || '',
       unidade: p.unidade === 'semanas' ? 'semanas' : 'meses',
-      dataRevisao: p.dataRevisao || '',
+      /* A Data de Revisão é SEMPRE hoje (ago/2026), não um campo de quem edita.
+         Ela é a régua do que está atrasado: uma data fixa digitada à mão
+         envelhecia junto com o arquivo, e o cronograma passava a mentir sobre o
+         próprio atraso até alguém lembrar de atualizar o campo.
+         Aqui é o ponto único de entrada de dados na página — localStorage,
+         import de JSON e o próprio export (que passa por aqui) —, então
+         sobrescrever neste lugar cobre todos eles de uma vez. O campo continua
+         no JSON exportado por compatibilidade com arquivos v1. */
+      dataRevisao: todayISO(),
       inicio: p.inicio || '',
       fim: p.fim || '',
       horizonteQtd: p.horizonteQtd || '',
@@ -1018,7 +1041,8 @@
     { key: 'nome', label: 'Nome do projeto', type: 'text', full: true, required: true },
     { key: 'lider', label: 'Líder', type: 'text' },
     { key: 'unidade', label: 'Unidade de tempo', type: 'select', options: UNIDADE_OPTS, default: 'meses' },
-    { key: 'dataRevisao', label: 'Data de revisão', type: 'date' },
+    /* `dataRevisao` NÃO é campo deste formulário (ago/2026): é sempre hoje,
+       carimbado em normalizeProjeto. Ver o comentário lá. */
     { key: 'inicio', label: 'Início do horizonte (opcional)', type: 'date' },
     { key: 'fim', label: 'Fim do horizonte (opcional)', type: 'date' },
     { key: 'horizonteQtd', label: 'Qtd. de meses/semanas a pré-carregar (opcional)', type: 'number' },
@@ -1056,7 +1080,7 @@
   window.crSelectProject = function (id) { CUR_PROJ_ID = id; render(); };
   window.crNovoProjeto = function () {
     if (!isEditable()) return;
-    var form = buildForm(PROJ_FIELDS, { dataRevisao: todayISO() });
+    var form = buildForm(PROJ_FIELDS, {});
     openModal('Novo projeto', form, [
       { label: 'Cancelar', cls: 'ghost', fn: closeModal },
       { label: 'Criar', cls: 'primary', fn: function () { salvarProjeto(form, null); } },
@@ -1077,9 +1101,9 @@
     if (existingId) {
       var p = findProjeto(existingId);
       p.nome = vals.nome; p.lider = vals.lider; p.unidade = vals.unidade || 'meses';
-      p.dataRevisao = vals.dataRevisao; p.inicio = vals.inicio; p.fim = vals.fim; p.horizonteQtd = vals.horizonteQtd;
+      p.inicio = vals.inicio; p.fim = vals.fim; p.horizonteQtd = vals.horizonteQtd;
     } else {
-      var np = { id: uid(), nome: vals.nome, lider: vals.lider, unidade: vals.unidade || 'meses', dataRevisao: vals.dataRevisao, inicio: vals.inicio, fim: vals.fim, horizonteQtd: vals.horizonteQtd, etapas: [] };
+      var np = { id: uid(), nome: vals.nome, lider: vals.lider, unidade: vals.unidade || 'meses', dataRevisao: todayISO(), inicio: vals.inicio, fim: vals.fim, horizonteQtd: vals.horizonteQtd, etapas: [] };
       DATA.projetos.push(np); CUR_PROJ_ID = np.id;
     }
     closeModal(); saveData(); render();
@@ -1600,8 +1624,10 @@
       else msg = 'Entra como <b>projeto novo</b>.';
       html += '<div class="cr-impcard">' +
         '<h4>' + esc(p.nome || '(sem nome)') + '</h4>' +
+        /* sem "Revisão" aqui: a data do arquivo é ignorada na importação (a
+           revisão é sempre hoje), então mostrá-la no preview prometeria algo
+           que o import não cumpre. */
         '<div class="cr-impmeta">Líder <b>' + esc(p.lider || '—') + '</b>' +
-        ' · Revisão <b>' + (p.dataRevisao ? fmtDateBR(p.dataRevisao) : '—') + '</b>' +
         ' · <b>' + ((p.etapas || []).length) + '</b> etapa(s) · <b>' + nTarefas + '</b> tarefa(s)</div>' +
         '<div class="cr-impmeta">' + msg + '</div>' +
         (it.via === 'nome' ?
@@ -1706,54 +1732,42 @@
     }
     return out;
   }
+  /* DUAS saídas, não quatro. "Importar JSON" e "Baixar JSON demo" saíram daqui:
+     são operações de arquivo, e quem chega numa tela vazia ainda não tem arquivo
+     nenhum — a primeira decisão é começar do zero ou olhar um exemplo pronto.
+     As duas continuam no menu "Dados" do rail (renderRail), que é onde fazem
+     sentido: lá já existe um cronograma pra exportar ou substituir. */
   function crEmptyState() {
     return '<div class="cr-empty"><p>Nenhum projeto cadastrado ainda.</p>' +
       (isEditable() ?
         '<div class="cr-emptyactions">' +
         '<button class="cr-btn primary" onclick="crNovoProjeto()"><span class="material-symbols-outlined">add</span>Novo projeto</button>' +
-        '<label class="cr-btn ghost cr-filelabel">' +
-        '<span class="material-symbols-outlined">upload</span>Importar JSON' +
-        '<input type="file" accept=".json,application/json" onchange="crImportarArquivo(this.files[0]); this.value=\'\';">' +
-        '</label>' +
         '<button class="cr-btn ghost" onclick="crCarregarExemplo()"><span class="material-symbols-outlined">science</span>Carregar demo</button>' +
-        '<button class="cr-btn ghost" onclick="crExportarExemplo()"><span class="material-symbols-outlined">download</span>Baixar JSON demo</button>' +
         '</div>'
-        : '<p>Crie um projeto ou importe um arquivo JSON.</p>') +
+        /* em apresentação não há botão nenhum: isEditable() é falso justamente
+           pra esconder ação. Então o texto diz o que destrava, não o que fazer. */
+        : '<p>Saia do modo apresentação para criar um projeto.</p>') +
       '</div>';
   }
+  /* Só identificação do projeto. Editar/Excluir mudaram pro #cr-rail (ver
+     renderRail): eram as duas únicas ações que moravam aqui dentro, e ter ação
+     em três lugares diferentes da tela era o que deixava o modo de edição
+     visualmente bagunçado. */
   function crProjectHeader(p) {
     return '<div class="cr-projhead"><div><h2>' + esc(p.nome) + '</h2><div class="cr-projmeta">' +
       (p.lider ? ('Líder: ' + esc(p.lider)) : '') +
       '</div></div>' +
-      (isEditable() ? '<div class="cr-projactions">' +
-        '<button class="cr-btn ghost sm" onclick="crEditarProjeto(\'' + p.id + '\')"><span class="material-symbols-outlined">edit</span>Editar</button>' +
-        '<button class="cr-btn danger sm" onclick="crExcluirProjeto(\'' + p.id + '\')"><span class="material-symbols-outlined">delete</span>Excluir</button>' +
-        '</div>' : '') +
       '</div>';
   }
-  function crKpiRow(p, pv, kpi) {
-    var revLabel = p.dataRevisao ? fmtDateBR(p.dataRevisao) : 'Não definida';
+  /* O KPI de revisão não é mais clicável (nem tem aviso de "defina a data"):
+     a Data de Revisão é sempre hoje, então não há nada pra editar nem o que
+     faltar. Ver normalizeProjeto. */
+  function crKpiRow(p, kpi) {
     return '<div class="cr-kpirow">' +
-      '<div class="cr-kpi' + (isEditable() ? ' cr-clickable' : '') + '"' + (isEditable() ? (' onclick="crEditarProjeto(\'' + p.id + '\')"') : '') + '>' +
-      '<div class="cr-kpik">Data de Revisão</div><div class="cr-kpiv">' + esc(revLabel) + '</div></div>' +
+      '<div class="cr-kpi">' +
+      '<div class="cr-kpik">Data de Revisão</div><div class="cr-kpiv">' + esc(fmtDateBR(p.dataRevisao)) + '</div></div>' +
       '<div class="cr-kpi"><div class="cr-kpik">Andamento</div><div class="cr-kpiv">' + (kpi.andamentoPct == null ? '—' : kpi.andamentoPct + '%') + '</div></div>' +
       '<div class="cr-kpi"><div class="cr-kpik">Conclusão</div><div class="cr-kpiv">' + (kpi.conclusaoPct == null ? '—' : kpi.conclusaoPct + '%') + '</div></div>' +
-      '</div>' +
-      (pv.R == null ? '<div class="cr-alert warn"><span class="material-symbols-outlined">warning</span>Defina a Data de Revisão do projeto para calcular atrasos (Andamento).</div>' : '');
-  }
-  /* Ações de dados: importar e exportar arquivos JSON.
-     A persistência normal acontece automaticamente no localStorage. */
-  function crActionsBar(p) {
-    if (!isEditable()) return '';
-    return '<div class="cr-actionsbar">' +
-      '<button class="cr-btn primary sm" onclick="crNovaEtapa(\'' + p.id + '\')"><span class="material-symbols-outlined">add</span>Etapa</button>' +
-      '<button class="cr-btn ghost sm" onclick="crExportarTudo()"><span class="material-symbols-outlined">download</span>Exportar tudo</button>' +
-      '<button class="cr-btn ghost sm" onclick="crExportarProjeto()"><span class="material-symbols-outlined">download</span>Exportar projeto</button>' +
-      '<button class="cr-btn ghost sm" onclick="crExportarExemplo()"><span class="material-symbols-outlined">science</span>Baixar JSON demo</button>' +
-      '<label class="cr-btn ghost sm cr-filelabel">' +
-      '<span class="material-symbols-outlined">upload</span>Importar JSON' +
-      '<input type="file" accept=".json,application/json" onchange="crImportarArquivo(this.files[0]); this.value=\'\';">' +
-      '</label>' +
       '</div>';
   }
   /* Aviso de pendência: fica no bloco fixo, junto dos KPIs, porque é informação
@@ -1819,17 +1833,8 @@
       '<span><i style="background:var(--cr-red)"></i>Reprogramada</span>' +
       '<span><i style="background:var(--cr-blue)"></i>Concluída</span>' +
       '<span><i style="background:var(--cr-gray-p-dark)"></i>Replanejado (novo P)</span>' +
-      '<span><i style="background:var(--cr-red);width:3px;height:14px;border-radius:0"></i>Linha de revisão</span>' +
-      '</div>' + crHintLine();
-  }
-  /* Uma linha, porque ela entra no bloco fixo e cada pixel aqui sai da altura
-     da tabela. Duas dicas só, as duas sem outra pista na tela:
-
-       · o amarelo automático (ago/2026) aparece SOBRE uma célula marcada "Em
-         dia", e sem esta frase quem marcou lê isso como bug da página;
-       · a alça de arraste da coluna é invisível de propósito (ver .cr-rsz). */
-  function crHintLine() {
-    return '<div class="cr-hintline"></div>';
+      '<span><i style="background:var(--cr-red);width:3px;height:14px;border-radius:0"></i>Linha de revisão (hoje)</span>' +
+      '</div>';
   }
   function crTarefaRows(etapa, t, ei, ti, pv) {
     var v = pv.view(t);
@@ -2115,21 +2120,18 @@
     var itens = [];
     itens.push('A célula da sub-linha indica <b>presença</b> de tarefa planejada naquele período, ' +
       'não intensidade de esforço. O número na linha da pessoa é a contagem de projetos ' +
-      'simultâneos — para uma pessoa só, o teto praticável é <b>2</b>, e mesmo 2 já cobra troca de contexto.');
+      'simultâneos.');
     itens.push('<b>Passe o mouse</b> sobre uma célula colorida para ver os títulos das tarefas daquele ' +
       'período. Na linha da pessoa, as tarefas vêm agrupadas por projeto.');
     if (aloc.unidade === 'semanas') {
       itens.push('Na visão <b>semanal</b>, um projeto de escopo mensal ocupa <b>todas</b> as semanas que as ' +
-        'datas das suas tarefas cobrem (01–30/09 = 5 semanas). É o que as datas dizem, não erro de cálculo.');
+        'datas das suas tarefas cobrem (01–30/09 = 5 semanas).');
     }
     itens.push('A barra vai até <b>max(Fim, Novo Prazo)</b> — é onde o trabalho vai consumir tempo. ' +
       'O tom escuro marca o período que só existe por causa do Novo Prazo.');
     itens.push('Esta visão é de <b>planejamento</b>: a célula é cinza porque há trabalho previsto ali. ' +
       'Ela não repete o que foi declarado célula por célula na linha R do Gantt — lá se registra o que ' +
-      'aconteceu em cada período, aqui se olha onde o trabalho está previsto. A única cor de estado é ' +
-      'o <b>amarelo de atrasada</b>, que vem das datas (Data de Revisão além do prazo). O que também ' +
-      'atravessa é o status da tarefa: marcar o último período como concluída tira a tarefa daqui ' +
-      'quando "esconder concluídas" está ligado.');
+      'aconteceu em cada período, aqui se olha onde o trabalho está previsto.');
     if (aloc.semFim.length) {
       var porProj = Object.create(null);   // chave = nome de projeto (texto livre), ver byKey
       aloc.semFim.forEach(function (s) { porProj[s.projeto] = (porProj[s.projeto] || 0) + 1; });
@@ -2161,48 +2163,149 @@
   function renderProjSelector() {
     var sel = document.getElementById('cr-projsel'); if (!sel) return;
     sel.innerHTML = DATA.projetos.map(function (p) { return '<option value="' + p.id + '"' + (p.id === CUR_PROJ_ID ? ' selected' : '') + '>' + esc(p.nome) + '</option>'; }).join('');
-    sel.style.display = DATA.projetos.length ? '' : 'none';
   }
-  function renderToolbarButtons() {
+  /* ---------- TOPO: NAVEGAÇÃO ----------
+     Só o que leva a outra tela: qual projeto e qual visão. O seletor de projeto
+     não aparece na Ocupação porque lá a visão é consolidada — não há "o
+     projeto atual" pra escolher. */
+  function renderTopbar() {
     var ocupacao = VIEW_MODE === 'ocupacao';
-    // o seletor de projeto e o "+ Projeto" são por projeto — não fazem sentido
-    // na visão consolidada de ocupação.
+    var temProj = !!(DATA && DATA.projetos.length);
     var sel = document.getElementById('cr-projsel');
-    if (sel) sel.style.display = (!ocupacao && DATA && DATA.projetos.length) ? '' : 'none';
-    var btnNovo = document.getElementById('cr-btnnovo');
-    if (btnNovo) btnNovo.style.display = (!ocupacao && isEditable()) ? '' : 'none';
-    // O modo apresentação é apenas uma preferência de visualização.
-    var btnPresent = document.getElementById('cr-btnpresent');
-    if (btnPresent) {
-      btnPresent.style.display = (!ocupacao) ? '' : 'none';
-      btnPresent.innerHTML = PRESENT_MODE ?
-        '<span class="material-symbols-outlined">edit</span>Modo edição' :
-        '<span class="material-symbols-outlined">visibility</span>Modo apresentação';
+    if (sel) sel.style.display = (!ocupacao && temProj) ? '' : 'none';
+    var sw = document.getElementById('cr-viewswitch');
+    if (sw) sw.style.display = temProj ? '' : 'none';
+    var bg = document.getElementById('cr-vgantt');
+    var bo = document.getElementById('cr-vocup');
+    if (bg) bg.className = ocupacao ? '' : 'active';
+    if (bo) bo.className = ocupacao ? 'active' : '';
+  }
+
+  /* ---------- RAIL DE FERRAMENTAS (direita) ----------
+     Uma casa só pras AÇÕES. Antes elas moravam em três lugares — a toolbar do
+     topo, a .cr-actionsbar acima da tabela e o header do projeto —, e em modo de
+     edição a tela virava um campo de botões espalhados.
+
+     O rail é remontado a cada render() (é assim que os rótulos de alternância
+     — apresentação/edição, entrar/sair de tela cheia — ficam sempre certos).
+     Por isso o estado do <details> "Dados" vive no RAIL_MENU_OPEN, fora do DOM.
+
+     Cada botão leva `title` além do rótulo: o rótulo diz O QUE, o title diz o
+     efeito ("Baixa só o projeto atual"), que não cabe num botão de 184px. */
+  function railBtn(cls, onclick, icon, label, title, extra) {
+    return '<button type="button" class="cr-btn ' + cls + '" onclick="' + onclick + '"' +
+      ' title="' + esc(title || label) + '"' + (extra || '') + '>' +
+      '<span class="material-symbols-outlined">' + icon + '</span>' +
+      '<span class="cr-raillabel">' + esc(label) + '</span></button>';
+  }
+  function railGroup(label, botoes) {
+    var corpo = botoes.filter(Boolean).join('');
+    if (!corpo) return '';
+    return '<div class="cr-railgroup"><label>' + esc(label) + '</label>' + corpo + '</div>';
+  }
+  function renderRail() {
+    var rail = document.getElementById('cr-rail'); if (!rail) return;
+    var root = crRoot();
+    var ocupacao = VIEW_MODE === 'ocupacao';
+    var temProj = !!(DATA && DATA.projetos.length);
+    /* Sem projeto o rail sai inteiro da tela: o empty-state (crEmptyState) já
+       oferece criar e carregar a demo, e um rail com um botão só seria ruído.
+       innerHTML vazio é o que faz o #cr-rail:empty do CSS colapsar a coluna —
+       por isso nem o botão de recolher é emitido aqui. */
+    if (!temProj) {
+      rail.innerHTML = '';
+      if (root) root.classList.remove('cr-rail-collapsed');
+      return;
     }
-    // A visão de ocupação é uma visão de leitura consolidada.
-    var btnView = document.getElementById('cr-btnview');
-    if (btnView) {
-      btnView.style.display = (DATA && DATA.projetos.length) ? '' : 'none';
-      btnView.innerHTML = ocupacao ?
-        '<span class="material-symbols-outlined">view_timeline</span>Gantt do projeto' :
-        '<span class="material-symbols-outlined">groups</span>Ocupação da equipe';
+    if (root) root.classList.toggle('cr-rail-collapsed', RAIL_COLLAPSED);
+    var p = findProjeto(CUR_PROJ_ID);
+    var edit = isEditable();
+    var gantt = !ocupacao;
+    /* mesmo par aria-label/aria-expanded da .hamburger da navegação */
+    var html = '<button type="button" class="cr-railtoggle" onclick="crToggleRail()"' +
+      ' aria-label="' + (RAIL_COLLAPSED ? 'Expandir ferramentas' : 'Recolher ferramentas') + '"' +
+      ' aria-expanded="' + (RAIL_COLLAPSED ? 'false' : 'true') + '"' +
+      ' title="' + (RAIL_COLLAPSED ? 'Expandir ferramentas' : 'Recolher ferramentas') + '">' +
+      '<span class="material-symbols-outlined">chevron_right</span></button>';
+
+    /* NAVEGAÇÃO, só em tela cheia. O lugar destes dois é o topo (.cr-topbar), e
+       lá eles ficam — mas em tela cheia o header sai inteiro da tela (ver
+       #cr-root.cr-full .cr-head no CSS) e levaria consigo as duas únicas portas
+       pra trocar de projeto e de visão. O rail é o único chrome que sobrevive ao
+       fullscreen, então elas se mudam pra cá enquanto ele dura. Fora da tela
+       cheia o grupo não existe: dois caminhos pra mesma coisa na mesma tela é
+       exatamente a bagunça que o rail veio desfazer. */
+    if (isFull()) {
+      var selProj = '';
+      if (gantt && DATA.projetos.length > 1) {
+        selProj = '<select class="cr-railsel" aria-label="Projeto" title="Trocar de projeto"' +
+          ' onchange="crSelectProject(this.value)">' +
+          DATA.projetos.map(function (pr) {
+            return '<option value="' + esc(pr.id) + '"' +
+              (pr.id === CUR_PROJ_ID ? ' selected' : '') + '>' + esc(pr.nome) + '</option>';
+          }).join('') + '</select>';
+      }
+      html += railGroup('Navegação', [
+        selProj,
+        railBtn(gantt ? 'primary' : 'ghost', 'crSetViewMode(\'gantt\')', 'view_timeline',
+          'Gantt', 'Ver o cronograma do projeto'),
+        railBtn(ocupacao ? 'primary' : 'ghost', 'crSetViewMode(\'ocupacao\')', 'groups',
+          'Ocupação', 'Ver a carga da equipe'),
+      ]);
     }
-    // tela cheia: só faz sentido com tabela na tela, mas vale nas duas visões e
-    //  — é leitura, não edição.
-    var btnFull = document.getElementById('cr-btnfull');
-    if (btnFull) {
-      btnFull.style.display = (DATA && DATA.projetos.length) ? '' : 'none';
-      btnFull.innerHTML = isFull() ?
-        '<span class="material-symbols-outlined">fullscreen_exit</span>Sair da tela cheia' :
-        '<span class="material-symbols-outlined">fullscreen</span>Tela cheia';
+
+    html += railGroup('Criar', [
+      (gantt && edit) ? railBtn('primary', 'crNovoProjeto()', 'add', 'Projeto', 'Criar um novo projeto') : '',
+      (gantt && edit && p) ? railBtn('ghost', 'crNovaEtapa(\'' + p.id + '\')', 'add', 'Etapa', 'Criar uma etapa neste projeto') : '',
+    ]);
+
+    if (gantt && edit && p) {
+      html += railGroup(p.nome, [
+        railBtn('ghost', 'crEditarProjeto(\'' + p.id + '\')', 'edit', 'Editar', 'Editar os dados do projeto'),
+        railBtn('danger', 'crExcluirProjeto(\'' + p.id + '\')', 'delete', 'Excluir', 'Excluir este projeto'),
+      ]);
     }
-    // largura de coluna é a outra preferência de leitura: mesma condição do
-    // tela cheia (precisa de tabela na tela) e mesma indiferença a quem edita.
-    // O COLW é único pra página, então um botão só zera as colunas das duas
-    // visões — a Ocupação tem colunas próprias (anome/apico) e cai no mesmo
-    // reset. Ver crResetColWidths().
-    var btnResetW = document.getElementById('cr-btnresetcolw');
-    if (btnResetW) btnResetW.style.display = (DATA && DATA.projetos.length) ? '' : 'none';
+
+    /* Import/export num <details>: eram quatro botões com o mesmo peso visual
+       de "+ Etapa", que é a ação do dia a dia. Aqui viram uma linha só, e o
+       peso volta pra quem merece. */
+    if (gantt && edit) {
+      html += '<div class="cr-railgroup"><label>Dados</label>' +
+        '<details class="cr-railmenu"' + (RAIL_MENU_OPEN ? ' open' : '') + ' ontoggle="crRailMenuToggle(this)">' +
+        '<summary title="Importar e exportar arquivos JSON">' +
+        '<span class="material-symbols-outlined">folder</span>' +
+        '<span class="cr-raillabel">Dados</span>' +
+        '<span class="material-symbols-outlined cr-railmenu-caret">chevron_right</span>' +
+        '</summary>' +
+        '<div class="cr-railmenulist">' +
+        railBtn('ghost', 'crExportarProjeto()', 'download', 'Exportar projeto', 'Baixa só o projeto atual') +
+        railBtn('ghost', 'crExportarTudo()', 'download', 'Exportar tudo', 'Baixa todos os projetos da página') +
+        '<label class="cr-btn ghost cr-filelabel" title="Carrega um cronograma de um arquivo JSON">' +
+        '<span class="material-symbols-outlined">upload</span>' +
+        '<span class="cr-raillabel">Importar JSON</span>' +
+        '<input type="file" accept=".json,application/json" onchange="crImportarArquivo(this.files[0]); this.value=\'\';">' +
+        '</label>' +
+        railBtn('ghost', 'crExportarExemplo()', 'science', 'Baixar JSON demo', 'Baixa o cronograma de exemplo') +
+        '</div></details></div>';
+    }
+
+    /* Preferências de LEITURA: valem nas duas visões e pra quem só lê. O
+       COLW é único da página, então "Redefinir larguras" zera as colunas das
+       duas visões de uma vez (ver crResetColWidths). */
+    html += railGroup('Exibição', [
+      gantt ? railBtn('ghost', 'crTogglePresentMode()',
+        PRESENT_MODE ? 'edit' : 'visibility',
+        PRESENT_MODE ? 'Modo edição' : 'Modo apresentação',
+        PRESENT_MODE ? 'Volta a mostrar as ações de edição' : 'Esconde as ações de edição para apresentar') : '',
+      railBtn('ghost', 'crToggleFullscreen()',
+        isFull() ? 'fullscreen_exit' : 'fullscreen',
+        isFull() ? 'Sair da tela cheia' : 'Tela cheia',
+        'Expande a tabela para a tela inteira (Esc para sair)'),
+      railBtn('ghost', 'crResetColWidths()', 'swap_horiz', 'Redefinir larguras',
+        'Volta todas as colunas à largura padrão'),
+    ]);
+
+    rail.innerHTML = html;
   }
 
   /* ---------- ROLAGEM ENTRE RENDERS ----------
@@ -2235,7 +2338,8 @@
   function render() {
     ensureCurrentProject();
     renderProjSelector();
-    renderToolbarButtons();
+    renderTopbar();
+    renderRail();
     var root = document.getElementById('cr-body');
     var chave = VIEW_MODE + '|' + (VIEW_MODE === 'ocupacao' ? '' : CUR_PROJ_ID);
     var scroll = (chave === LAST_RENDER_KEY) ? scrollSnapshot() : null;
@@ -2250,17 +2354,20 @@
     var p = findProjeto(CUR_PROJ_ID);
     var pv = computeProjectView(p);
     var kpi = projectKPIs(p, pv);
-    root.innerHTML = '<div class="cr-stickytop">' + crProjectHeader(p) + crKpiRow(p, pv, kpi) +
-      crFcaAlert(p) + crActionsBar(p) + crLegend() + crFcaPanel(p, pv) + '</div>' + crGanttWrap(p, pv);
+    root.innerHTML = '<div class="cr-stickytop">' + crProjectHeader(p) + crKpiRow(p, kpi) +
+      crFcaAlert(p) + crLegend() + crFcaPanel(p, pv) + '</div>' + crGanttWrap(p, pv);
     relayout();
     if (scroll) scrollRestore(scroll);
   }
 
-  /* quanto sobra de tela abaixo do bloco fixo (título+KPIs+ações+legenda)
-     muda conforme o conteúdo (alerta de Data de Revisão ausente, ações só
-     pra quem edita, legenda quebrando linha em telas estreitas) e o
-     tamanho da janela — por isso é recalculado a cada render() e no
-     resize, em vez de um valor fixo no CSS. */
+  /* quanto sobra de tela abaixo do bloco fixo (título+KPIs+legenda+painel de
+     FCA) muda conforme o conteúdo (aviso de FCA pendente, painel aberto ou
+     fechado, legenda quebrando linha em telas estreitas) e o tamanho da
+     janela — por isso é recalculado a cada render() e no resize, em vez de um
+     valor fixo no CSS.
+     Em telas ≤680px o CSS solta o bloco (position:static) e libera a altura da
+     tabela (max-height:none); a variável continua sendo escrita aqui e
+     simplesmente deixa de ser lida. Ver o media query. */
   function syncTableMaxHeight() {
     var stickyTop = document.querySelector('.cr-stickytop');
     var wrap = document.querySelector('.cr-ganttwrap');
@@ -2307,7 +2414,7 @@
       root.classList.toggle('cr-full-overlay', on && FULL_FALLBACK);
     }
     document.body.classList.toggle('cr-fullbody', on);
-    renderToolbarButtons();
+    renderRail();   // o rótulo do botão alterna entre "Tela cheia" e "Sair"
     /* relayout agora E no frame seguinte: o fullscreenchange pode chegar antes
        de o navegador atualizar window.innerHeight, e é dele que sai a altura
        máxima da tabela (syncTableMaxHeight). Sem a segunda passada a tabela fica
@@ -2355,10 +2462,33 @@
   };
 
   /* ---------- VISÃO DE OCUPAÇÃO (handlers) ---------- */
-  window.crToggleViewMode = function () {
-    VIEW_MODE = (VIEW_MODE === 'ocupacao') ? 'gantt' : 'ocupacao';
+  /* Estado explícito, não toggle: quem chama é o controle segmentado do topo,
+     onde cada botão representa UMA visão. Com toggle, clicar no botão da visão
+     já ativa trocaria pra outra — o oposto do que o segmentado promete. */
+  window.crSetViewMode = function (m) {
+    var novo = (m === 'ocupacao') ? 'ocupacao' : 'gantt';
+    if (novo === VIEW_MODE) return;
+    VIEW_MODE = novo;
     lsSet(VIEW_KEY, VIEW_MODE);
     render();
+  };
+  /* o <details> do menu "Dados" é recriado a cada render (o rail é remontado),
+     então o aberto/fechado tem que viver fora do DOM — senão exportar um
+     arquivo fecharia o menu. Não persiste: é momentâneo. */
+  window.crRailMenuToggle = function (el) { RAIL_MENU_OPEN = !!(el && el.open); };
+  /* Recolher/expandir o rail muda a largura da coluna do conteúdo, logo muda a
+     sobra que applyColLayout distribui entre as colunas da tabela — daí o
+     relayout. Duas passadas: uma agora (pra não esperar a animação) e outra
+     depois dos 250ms da transição de `grid-template-columns`, quando a largura
+     final já valeu. Sem a segunda, a régua fica calculada pela largura antiga. */
+  var RAIL_ANIM_TIMER = null;
+  window.crToggleRail = function () {
+    RAIL_COLLAPSED = !RAIL_COLLAPSED;
+    lsSet(RAIL_COLLAPSED_KEY, RAIL_COLLAPSED ? '1' : '0');
+    renderRail();
+    relayout();
+    clearTimeout(RAIL_ANIM_TIMER);
+    RAIL_ANIM_TIMER = setTimeout(relayout, 300);
   };
   window.crAlocSetUnidade = function (u) {
     ALOC_UNIDADE = (u === 'meses') ? 'meses' : 'semanas';
@@ -2419,6 +2549,14 @@
       ALOC_UNIDADE = localStorage.getItem(ALOC_UNIDADE_KEY) === 'meses' ? 'meses' : 'semanas';
       ALOC_HIDE_DONE = localStorage.getItem(ALOC_HIDE_DONE_KEY) === '1';
       FCA_PANEL_OPEN = localStorage.getItem(FCA_PANEL_KEY) === '1';
+      /* Default FECHADO em qualquer largura. Antes dependia da tela (aberto
+         acima de 980px), porque recolhido era só esconder rótulos — barato de
+         reverter, e ler nove ícones sem legenda numa tela larga era perda seca.
+         Agora recolhido esconde as ferramentas inteiras, e é isso que se quer de
+         partida: o assunto da tela é a tabela, e editar é uma visita ocasional.
+         A partir da primeira escolha quem manda é ela — daí o teste de `null`. */
+      var railSalvo = localStorage.getItem(RAIL_COLLAPSED_KEY);
+      RAIL_COLLAPSED = (railSalvo === null) ? true : (railSalvo === '1');
     } catch (e) { }
     ALOC_EXCL = lsGetJSON(ALOC_EXCL_KEY, {});
     ALOC_DECIDED = lsGetJSON(ALOC_DECIDED_KEY, {});

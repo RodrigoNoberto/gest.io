@@ -4,8 +4,6 @@
 
 {% block title %}Cronograma de Projetos{% endblock %}
 
-{% block page_title %}Cronograma de Projetos{% endblock %}
-
 {% block nav_produtos %}active{% endblock %}
 
 {% block extra_css %}
@@ -14,51 +12,51 @@
 
 {% block content %}
 
-<div class="dashboard-area" id="dashboardArea">
-  <div id="cr-root">
-    <div class="cr-toolbar">
-      <select id="cr-projsel" onchange="crSelectProject(this.value)" style="display:none"></select>
-      <button class="cr-btn primary sm" id="cr-btnnovo" onclick="crNovoProjeto()" style="display:none">
-        <span class="material-symbols-outlined">add</span>Projeto
-      </button>
-      <button class="cr-btn ghost sm" id="cr-btnpresent" onclick="crTogglePresentMode()" style="display:none">
-        <span class="material-symbols-outlined">visibility</span>Modo apresentação
-      </button>
-      <!-- tela cheia e larguras de coluna: preferências de LEITURA, não de
-           dados — valem pras duas visões, pra quem só lê e em modo
-           apresentação. Ver crToggleFullscreen() no script: quem entra em
-           fullscreen é o #cr-root inteiro, não a tabela. -->
-      <button class="cr-btn ghost sm" id="cr-btnfull" onclick="crToggleFullscreen()" style="display:none"
-              title="Expande a tabela para a tela inteira (Esc para sair)">
-        <span class="material-symbols-outlined">fullscreen</span>Tela cheia
-      </button>
-      <button class="cr-btn ghost sm" id="cr-btnresetcolw" onclick="crResetColWidths()" style="display:none"
-              title="Volta todas as colunas à largura padrão">
-        <span class="material-symbols-outlined">swap_horiz</span>Redefinir larguras
-      </button>
-      <button class="cr-btn save sm" id="cr-btnsave" onclick="crSalvarAgora()" style="display:none" disabled
-              title="Grava no localStorage deste navegador (Ctrl+S)">
-        <span class="material-symbols-outlined">save</span>Salvar local
-      </button>
-      <!-- laranja: leva a OUTRA visão, não é ação nesta. Ver .cr-btn.accent.
-           É o ÚLTIMO do DOM de propósito: o CSS o empurra pro canto direito
-           (#cr-btnview{margin-left:auto}), então tudo que vier depois dele no
-           HTML apareceria à direita dele e o botão deixaria de ser o canto. -->
-      <button class="cr-btn accent sm" id="cr-btnview" onclick="crToggleViewMode()" style="display:none">
-        <span class="material-symbols-outlined">groups</span>Ocupação da equipe
-      </button>
-    </div>
-    <div id="cr-body" class="cr-body">
-      <div class="cr-empty">Carregando cronograma…</div>
-    </div>
+<div id="cr-root">
+  <!-- Faixa branca no topo, largura total: o nome do APLICATIVO é chrome, não o
+       assunto da tela. Antes era um bloco de 28px com eyebrow e linha de apoio,
+       e ele gritava mais alto que o nome do projeto (.cr-projhead, dentro do
+       #cr-body) — que é o que a pessoa vem ler. Vira <h1> de 17px e o projeto,
+       de 19px, passa a ser o maior título da página. Em tela cheia a faixa sai
+       (ver #cr-root.cr-full .cr-head no CSS). -->
+  <header class="cr-head">
+    <h1 class="cr-title">Cronograma de Projetos</h1>
 
-    <!-- modal + toast: precisam ficar dentro de #cr-root pra herdar as
-         variáveis CSS (--cr-navy etc.) definidas nesse escopo. Fora daqui,
-         var(--cr-navy) fica indefinida e o botão "primary" (fundo navy)
-         renderiza transparente com texto branco — invisível no fundo branco. -->
-    <div id="cr-modalbg"><div class="cr-modal"><h3 id="cr-mtitle"></h3><div id="cr-mbody"></div><div class="cr-modalact" id="cr-mact"></div></div></div>
-    <div id="cr-toast"></div>
+    <!-- Navegação, não ação: o seletor de projeto e a troca de visão ficam no
+         topo. As AÇÕES (criar, editar, exportar, preferências de leitura) vivem
+         todas no #cr-rail à direita — antes estavam espalhadas por três lugares
+         diferentes da tela. -->
+    <div class="cr-topbar" id="cr-topbar">
+      <select id="cr-projsel" onchange="crSelectProject(this.value)" style="display:none"
+              aria-label="Projeto"></select>
+      <div class="cr-segc" id="cr-viewswitch" style="display:none">
+        <button type="button" id="cr-vgantt" onclick="crSetViewMode('gantt')">
+          <span class="material-symbols-outlined">view_timeline</span>Gantt
+        </button>
+        <button type="button" id="cr-vocup" onclick="crSetViewMode('ocupacao')">
+          <span class="material-symbols-outlined">groups</span>Ocupação
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="cr-body" class="cr-body">
+    <div class="cr-empty">Carregando cronograma…</div>
   </div>
+
+  <!-- montado por renderRail() no script: o conteúdo depende de VIEW_MODE,
+       PRESENT_MODE e de haver projeto na tela. Fica vazio (e some, via
+       #cr-rail:empty) quando não há nada pra agir. -->
+  <aside id="cr-rail" aria-label="Ações do cronograma"></aside>
+
+  <!-- modal + toast: precisam ficar dentro de #cr-root pra herdar as
+       variáveis CSS (--cr-navy etc.) definidas nesse escopo. Fora daqui,
+       var(--cr-navy) fica indefinida e o botão "primary" (fundo navy)
+       renderiza transparente com texto branco — invisível no fundo branco.
+       Também é o que os mantém visíveis em tela cheia: o fullscreen nativo
+       renderiza só a subárvore do #cr-root. -->
+  <div id="cr-modalbg"><div class="cr-modal"><h3 id="cr-mtitle"></h3><div id="cr-mbody"></div><div class="cr-modalact" id="cr-mact"></div></div></div>
+  <div id="cr-toast"></div>
 </div>
 
 {% endblock %}

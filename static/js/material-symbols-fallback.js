@@ -14,6 +14,7 @@
     text_fields: '<path d="M4 6V4h16v2M12 4v16M9 20h6"/><path d="M4 11h6M7 11v9M5 20h4"/>',
     science: '<path d="M9 3h6M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3"/><path d="M8 15h8"/>',
     download: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
+    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
     delete: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/>',
     chat_bubble: '<path d="M5 5h14v10H8l-4 4V6a1 1 0 0 1 1-1z"/>',
