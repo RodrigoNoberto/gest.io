@@ -1,4 +1,4 @@
-# Gest.io
+# Gext.io
 
 Portal de sistemas de gestão desenvolvido em Django. Reúne ferramentas leves de planejamento e apoio operacional em um único ambiente, com interface própria (sidebar, tema e navegação compartilhados entre os produtos).
 

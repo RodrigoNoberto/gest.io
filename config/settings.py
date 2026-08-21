@@ -36,7 +36,7 @@ DEBUG = _env_bool('DEBUG', False)
 
 # Em produção, defina ALLOWED_HOSTS via variável de ambiente (hosts separados por vírgula).
 # Ex.: ALLOWED_HOSTS=meusite.com,www.meusite.com
-ALLOWED_HOSTS = ['gest-io.onrender.com']
+ALLOWED_HOSTS = ['gest-io.onrender.com', 'gext.io', 'www.gext.io']
 
 
 # Application definition

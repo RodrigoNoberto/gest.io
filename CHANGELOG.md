@@ -26,7 +26,7 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.
 ## [2026-08-20]
 
 ### Adicionado
-- Logotipo do Gest.io (`e9c34c4`).
+- Logotipo do Gext.io (`e9c34c4`).
 - Apps **Cronograma** (Gram.io) e **Temporizador** (Temp.io), com rotas, templates, CSS e JS próprios (`8ecaa39`).
 
 ## [2026-08-08]
