@@ -25,7 +25,6 @@ def _env_bool(name, default=False):
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Em produção, defina a variável de ambiente SECRET_KEY na plataforma de deploy.
 SECRET_KEY = os.environ.get(
     'SECRET_KEY',
     'django-insecure-ph55lm4$my&jl&$cz$aeq(tsl-%f5zwwajb!ka4%u63mvv&6nv',
@@ -34,10 +33,15 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = _env_bool('DEBUG', False)
 
-# Em produção, defina ALLOWED_HOSTS via variável de ambiente (hosts separados por vírgula).
 # Ex.: ALLOWED_HOSTS=meusite.com,www.meusite.com
-ALLOWED_HOSTS = ['gest-io.onrender.com', 'gext.io', 'www.gext.io']
+ALLOWED_HOSTS = ['gext.io', 'www.gext.io']
 
+render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if render_hostname:
+    ALLOWED_HOSTS.append(render_hostname)
+
+if DEBUG:
+    ALLOWED_HOSTS += ['localhost', '127.0.0.1']
 
 # Application definition
 # Sem django.contrib.admin/auth/contenttypes/sessions: nenhum app usa banco de
@@ -117,8 +121,10 @@ MAILERS = {
 
 
 # Segurança
-# O cookie de CSRF só é enviado por HTTPS em produção. Redirecionamento HTTPS
-# (SECURE_SSL_REDIRECT) e HSTS dependem de como a plataforma de deploy termina
-# o TLS (proxy reverso) — configure-os quando a plataforma for definida, para
-# não confiar cegamente em cabeçalhos como X-Forwarded-Proto sem essa garantia.
 CSRF_COOKIE_SECURE = not DEBUG
+CSRF_TRUSTED_ORIGINS = [
+    'https://gext.io',
+    'https://www.gext.io',
+]
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

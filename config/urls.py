@@ -22,7 +22,7 @@ from apps.temporizador.views import temporizador
 urlpatterns = [
     path('', home, name='home'),
     path('produtos/', produtos, name='produtos'),
-    path('cronograma/', cronograma, name='cronograma'),
-    path('temporizador/', temporizador, name='temporizador'),
+    path('produtos/cronograma/', cronograma, name='cronograma'),
+    path('produtos/temporizador/', temporizador, name='temporizador'),
     path('sobre/', sobre, name='sobre'),
 ]
